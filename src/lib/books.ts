@@ -1,0 +1,477 @@
+// Book metadata client. Tries Google Books first, falls back to OpenLibrary
+// when Google rate-limits (very common on the free anonymous quota) or errors.
+const GOOGLE_BOOKS = "https://www.googleapis.com/books/v1/volumes";
+const OPEN_LIBRARY = "https://openlibrary.org/search.json";
+const OPEN_LIBRARY_COVERS = "https://covers.openlibrary.org/b/id";
+
+// OpenLibrary's edge now 403s requests whose User-Agent looks bot-like or custom
+// (an anti-scraper measure), while letting browser-like UAs through. Node's fetch
+// sends no UA at all, so every catalog request must go through this helper with a
+// browser UA — otherwise the JSON endpoints return a 403 HTML page that then
+// fails to parse, leaving every shelf empty.
+const CATALOG_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+
+// Hard timeout on every catalog request. Without this, Node's fetch can stall
+// for ~60s on IPv6 connect timeouts when OL/Google routes flap, which then
+// cascades into 500s on the search/detail routes (or hangs the whole page).
+async function catalogFetch(url: string | URL, revalidate: number, timeoutMs = 6000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      headers: { "User-Agent": CATALOG_UA, Accept: "application/json" },
+      next: { revalidate },
+      signal: ctrl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export type BookSearchResult = {
+  externalId: string;
+  title: string;
+  subtitle?: string;
+  authors: string[];
+  description?: string;
+  coverUrl?: string;
+  pageCount?: number;
+  publishedYear?: number;
+  isbn13?: string;
+  genres: string[];
+  /** 0–5 average rating from the source catalog, when available. */
+  averageRating?: number;
+  /** Number of ratings backing the average. */
+  ratingsCount?: number;
+};
+
+export async function searchBooks(query: string, limit = 20): Promise<BookSearchResult[]> {
+  if (!query.trim()) return [];
+  try {
+    const results = await searchGoogleBooks(query, limit);
+    if (results.length > 0) return results;
+  } catch (err) {
+    console.warn("Google Books unavailable, falling back to OpenLibrary:", (err as Error).message);
+  }
+  return searchOpenLibrary(query, limit);
+}
+
+async function searchGoogleBooks(query: string, limit: number): Promise<BookSearchResult[]> {
+  const url = new URL(GOOGLE_BOOKS);
+  url.searchParams.set("q", query);
+  url.searchParams.set("maxResults", String(limit));
+  if (process.env.GOOGLE_BOOKS_API_KEY) {
+    url.searchParams.set("key", process.env.GOOGLE_BOOKS_API_KEY);
+  }
+  const res = await catalogFetch(url, 60 * 60);
+  if (!res.ok) throw new Error(`Google Books error: ${res.status}`);
+  const data = (await res.json()) as { items?: GoogleVolume[] };
+  return (data.items ?? []).map(toBook);
+}
+
+async function searchOpenLibrary(query: string, limit: number): Promise<BookSearchResult[]> {
+  const url = new URL(OPEN_LIBRARY);
+  url.searchParams.set("q", query);
+  url.searchParams.set("limit", String(limit));
+  const res = await catalogFetch(url, 60 * 60);
+  if (!res.ok) throw new Error(`OpenLibrary error: ${res.status}`);
+  const data = (await res.json()) as { docs?: OpenLibraryDoc[] };
+  return (data.docs ?? []).map(fromOpenLibrary);
+}
+
+type GoogleVolume = {
+  id: string;
+  volumeInfo?: {
+    title?: string;
+    subtitle?: string;
+    authors?: string[];
+    description?: string;
+    pageCount?: number;
+    publishedDate?: string;
+    categories?: string[];
+    imageLinks?: { thumbnail?: string; smallThumbnail?: string };
+    industryIdentifiers?: { type: string; identifier: string }[];
+    averageRating?: number;
+    ratingsCount?: number;
+  };
+};
+
+type OpenLibraryDoc = {
+  key: string;
+  title?: string;
+  subtitle?: string;
+  author_name?: string[];
+  first_publish_year?: number;
+  number_of_pages_median?: number;
+  isbn?: string[];
+  cover_i?: number;
+  subject?: string[];
+};
+
+function fromOpenLibrary(d: OpenLibraryDoc): BookSearchResult {
+  return {
+    externalId: `ol:${d.key}`,
+    title: d.title ?? "Untitled",
+    subtitle: d.subtitle,
+    authors: d.author_name ?? [],
+    coverUrl: d.cover_i ? `${OPEN_LIBRARY_COVERS}/${d.cover_i}-M.jpg` : undefined,
+    pageCount: d.number_of_pages_median,
+    publishedYear: d.first_publish_year,
+    isbn13: d.isbn?.find((i) => i.length === 13),
+    genres: (d.subject ?? []).slice(0, 6),
+  };
+}
+
+// --- Landing-page shelves -------------------------------------------------
+// These use OpenLibrary's trending + subjects endpoints. They need no API key,
+// are not rate-limited like Google's anonymous quota, and reliably include
+// cover ids — which is exactly what the homepage shelves need.
+
+const OPEN_LIBRARY_TRENDING = "https://openlibrary.org/trending/daily.json";
+const OPEN_LIBRARY_SUBJECT = "https://openlibrary.org/subjects";
+
+export type Category = { label: string; subject: string; description: string; featured?: boolean };
+
+// Genres available across the app. `featured` ones get a full shelf on the
+// /browse landing page (kept small so the page isn't fetching dozens of shelves
+// at once); the rest still appear in the nav menu and have their own genre page.
+export const CATEGORIES: Category[] = [
+  { label: "Fiction", subject: "fiction", featured: true, description: "Invented worlds and the stories we can’t put down." },
+  { label: "Science Fiction", subject: "science_fiction", featured: true, description: "Futures, far-off worlds, and what-ifs grounded in science." },
+  { label: "Fantasy", subject: "fantasy", featured: true, description: "Magic, myth, and epic quests beyond the edge of the map." },
+  { label: "Mystery & Thriller", subject: "mystery", featured: true, description: "Whodunits, twists, and pages that turn themselves." },
+  { label: "Romance", subject: "romance", featured: true, description: "Love stories, slow burns, and hard-won happy endings." },
+  { label: "History", subject: "history", featured: true, description: "True accounts of the people and events that shaped us." },
+  { label: "Philosophy", subject: "philosophy", featured: true, description: "Big questions about meaning, mind, and how to live." },
+  { label: "Biography", subject: "biography", featured: true, description: "The real lives of the remarkable and the ordinary." },
+  { label: "Horror", subject: "horror", description: "Dread, the uncanny, and things that go bump in the dark." },
+  { label: "Poetry", subject: "poetry", description: "Language at its most distilled and resonant." },
+  { label: "Young Adult", subject: "young_adult", description: "Coming-of-age stories with heart and high stakes." },
+  { label: "Science", subject: "science", description: "How the universe works, from atoms to galaxies." },
+  { label: "Psychology", subject: "psychology", description: "The mind, behavior, and what makes us tick." },
+  { label: "Business", subject: "business", description: "Strategy, work, money, and building things that last." },
+  { label: "Art", subject: "art", description: "Movements, makers, and the craft of seeing." },
+  { label: "Travel", subject: "travel", description: "Journeys, places, and the world beyond your door." },
+];
+
+// Shelves shown on the /browse landing page.
+export const FEATURED_CATEGORIES = CATEGORIES.filter((c) => c.featured);
+
+// Resolve a genre's display label from its subject slug, prettifying unknown
+// subjects (e.g. "young_adult" → "Young Adult") so arbitrary genre pages render.
+export function categoryLabel(subject: string): string {
+  const known = CATEGORIES.find((c) => c.subject === subject);
+  if (known) return known.label;
+  return subject
+    .split(/[_-]+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+// One-line blurb for a genre, with a sensible fallback for unknown subjects.
+export function categoryDescription(subject: string): string {
+  const known = CATEGORIES.find((c) => c.subject === subject);
+  return known?.description ?? `A shelf of ${categoryLabel(subject).toLowerCase()} titles to explore.`;
+}
+
+type OpenLibraryWork = {
+  key: string;
+  title?: string;
+  author_name?: string[];
+  authors?: { name?: string }[];
+  cover_i?: number;
+  cover_id?: number;
+};
+
+function fromOpenLibraryWork(w: OpenLibraryWork): BookSearchResult {
+  const coverId = w.cover_id ?? w.cover_i;
+  const authors =
+    w.author_name ?? (w.authors ?? []).map((a) => a.name ?? "").filter(Boolean);
+  return {
+    externalId: `ol:${w.key}`,
+    title: w.title ?? "Untitled",
+    authors,
+    coverUrl: coverId ? `${OPEN_LIBRARY_COVERS}/${coverId}-M.jpg` : undefined,
+    genres: [],
+  };
+}
+
+// Books people are picking up right now. Returns [] on any failure so the
+// homepage degrades gracefully (the shelf simply doesn't render).
+export async function getTrendingBooks(limit = 14): Promise<BookSearchResult[]> {
+  try {
+    const res = await catalogFetch(`${OPEN_LIBRARY_TRENDING}?limit=${limit * 2}`, 60 * 60 * 6);
+    if (!res.ok) throw new Error(`Trending error: ${res.status}`);
+    const data = (await res.json()) as { works?: OpenLibraryWork[] };
+    return (data.works ?? [])
+      .map(fromOpenLibraryWork)
+      .filter((b) => b.coverUrl)
+      .slice(0, limit);
+  } catch (err) {
+    console.warn("Trending books unavailable:", (err as Error).message);
+    return [];
+  }
+}
+
+// Recently published books, most-read first. Uses OpenLibrary search filtered
+// to the last couple of years and sorted by readlog count, so the shelf shows
+// new titles people are actually picking up (not obscure fresh catalog entries).
+// Returns [] on failure so the page degrades gracefully.
+export async function getNewReleases(limit = 14): Promise<BookSearchResult[]> {
+  const year = new Date().getFullYear();
+  try {
+    const url = new URL(OPEN_LIBRARY);
+    url.searchParams.set("q", `first_publish_year:[${year - 1} TO ${year + 1}]`);
+    url.searchParams.set("sort", "readinglog");
+    url.searchParams.set("limit", String(limit * 3));
+    url.searchParams.set("fields", "key,title,subtitle,author_name,cover_i,first_publish_year,isbn");
+    const res = await catalogFetch(url, 60 * 60 * 12);
+    if (!res.ok) throw new Error(`New releases error: ${res.status}`);
+    const data = (await res.json()) as { docs?: OpenLibraryDoc[] };
+    return (data.docs ?? [])
+      .map(fromOpenLibrary)
+      .filter((b) => b.coverUrl)
+      .slice(0, limit);
+  } catch (err) {
+    console.warn("New releases unavailable:", (err as Error).message);
+    return [];
+  }
+}
+
+// A shelf of books for a single theme (see CATEGORIES).
+export async function getBooksBySubject(subject: string, limit = 12): Promise<BookSearchResult[]> {
+  const { books } = await getSubjectPage(subject, limit);
+  return books;
+}
+
+export type SubjectPage = {
+  books: BookSearchResult[];
+  /** OpenLibrary's total work_count for the subject. */
+  total: number;
+  /**
+   * Whether the lookup actually reached OpenLibrary. `false` means the request
+   * failed (network / rate limit), so an empty result is inconclusive — callers
+   * should retry rather than treat the genre as nonexistent.
+   */
+  ok: boolean;
+};
+
+// A paginated page of books for a genre, used by the /browse/[subject] page and
+// its "Load more" control. Books without covers are dropped for a cleaner grid,
+// so a page may hold fewer than `limit` items even when more remain. Retries a
+// couple of times because OpenLibrary readily rate-limits bursts (the /browse
+// page alone fires ~10 subject requests at once).
+export async function getSubjectPage(
+  subject: string,
+  limit = 24,
+  offset = 0,
+): Promise<SubjectPage> {
+  const url = `${OPEN_LIBRARY_SUBJECT}/${subject}.json?limit=${limit}&offset=${offset}`;
+  const delays = [300, 800];
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    try {
+      const res = await catalogFetch(url, 60 * 60 * 24);
+      if (!res.ok) throw new Error(`Subject error: ${res.status}`);
+      const data = (await res.json()) as { works?: OpenLibraryWork[]; work_count?: number };
+      const books = (data.works ?? []).map(fromOpenLibraryWork).filter((b) => b.coverUrl);
+      return { books, total: data.work_count ?? 0, ok: true };
+    } catch (err) {
+      if (attempt === delays.length) {
+        console.warn(`Subject "${subject}" unavailable:`, (err as Error).message);
+        return { books: [], total: 0, ok: false };
+      }
+      await new Promise((r) => setTimeout(r, delays[attempt]));
+    }
+  }
+  return { books: [], total: 0, ok: false };
+}
+
+// --- Single-book lookup by external id -----------------------------------
+// Powers the /books/external/[...externalId] detail page (search results and
+// shelf covers that aren't in our DB yet). Returns null when the book can't be
+// found so the page can render a 404 instead of throwing.
+
+export async function getBookByExternalId(externalId: string): Promise<BookSearchResult | null> {
+  if (externalId.startsWith("ol:")) {
+    return getOpenLibraryWork(externalId.slice(3));
+  }
+  return getGoogleVolume(externalId);
+}
+
+type OpenLibraryWorkDetail = {
+  title?: string;
+  description?: string | { value?: string };
+  covers?: number[];
+  subjects?: string[];
+  authors?: { author?: { key?: string } }[];
+};
+
+async function getOpenLibraryWork(key: string): Promise<BookSearchResult | null> {
+  try {
+    const res = await catalogFetch(`https://openlibrary.org${key}.json`, 60 * 60 * 24);
+    if (!res.ok) return null;
+    const w = (await res.json()) as OpenLibraryWorkDetail;
+    let description = typeof w.description === "string" ? w.description : w.description?.value;
+    let coverId = Array.isArray(w.covers) ? w.covers.find((c) => c > 0) : undefined;
+    const authorKeys = (w.authors ?? [])
+      .map((a) => a.author?.key)
+      .filter((k): k is string => Boolean(k))
+      .slice(0, 5);
+
+    // OpenLibrary stores descriptions and many covers on individual editions,
+    // not the work itself. Fall back to the first edition that has whichever
+    // field we're still missing so detail pages don't render half-empty.
+    let isbn13: string | undefined;
+    let pageCount: number | undefined;
+    let publishedYear: number | undefined;
+    if (!coverId || !description) {
+      const ed = await getFirstUsefulEdition(key);
+      if (ed) {
+        if (!coverId && ed.coverId) coverId = ed.coverId;
+        if (!description && ed.description) description = ed.description;
+        isbn13 = ed.isbn13;
+        pageCount = ed.pageCount;
+        publishedYear = ed.publishedYear;
+      }
+    }
+
+    const [authors, rating] = await Promise.all([
+      Promise.all(authorKeys.map(getOpenLibraryAuthorName)).then((names) => names.filter(Boolean)),
+      getOpenLibraryRating(key),
+    ]);
+    return {
+      externalId: `ol:${key}`,
+      title: w.title ?? "Untitled",
+      authors,
+      description,
+      coverUrl: coverId ? `${OPEN_LIBRARY_COVERS}/${coverId}-L.jpg` : undefined,
+      genres: (w.subjects ?? []).slice(0, 6),
+      averageRating: rating.average,
+      ratingsCount: rating.count,
+      isbn13,
+      pageCount,
+      publishedYear,
+    };
+  } catch (err) {
+    console.warn("OpenLibrary work lookup failed:", (err as Error).message);
+    return null;
+  }
+}
+
+type OpenLibraryEdition = {
+  covers?: number[];
+  description?: string | { value?: string };
+  isbn_13?: string[];
+  number_of_pages?: number;
+  publish_date?: string;
+};
+
+// Walk through a work's editions and pluck the first one with usable metadata.
+// We cap the scan because some works have hundreds of editions, but the most
+// recent few usually carry the same cover and description as the rest.
+async function getFirstUsefulEdition(workKey: string): Promise<{
+  coverId?: number;
+  description?: string;
+  isbn13?: string;
+  pageCount?: number;
+  publishedYear?: number;
+} | null> {
+  try {
+    const res = await catalogFetch(
+      `https://openlibrary.org${workKey}/editions.json?limit=20`,
+      60 * 60 * 24,
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as { entries?: OpenLibraryEdition[] };
+    const entries = data.entries ?? [];
+
+    let coverId: number | undefined;
+    let description: string | undefined;
+    let isbn13: string | undefined;
+    let pageCount: number | undefined;
+    let publishedYear: number | undefined;
+
+    for (const e of entries) {
+      if (!coverId) {
+        coverId = (e.covers ?? []).find((c) => c > 0);
+      }
+      if (!description) {
+        const d = typeof e.description === "string" ? e.description : e.description?.value;
+        if (d) description = d;
+      }
+      if (!isbn13) isbn13 = e.isbn_13?.[0];
+      if (!pageCount && e.number_of_pages) pageCount = e.number_of_pages;
+      if (!publishedYear && e.publish_date) {
+        const m = e.publish_date.match(/\d{4}/);
+        if (m) publishedYear = Number(m[0]);
+      }
+      if (coverId && description && isbn13 && pageCount && publishedYear) break;
+    }
+    return { coverId, description, isbn13, pageCount, publishedYear };
+  } catch {
+    return null;
+  }
+}
+
+// OpenLibrary keeps community ratings on a separate endpoint, keyed by work.
+// Returns empty values (not an error) when a work has no ratings yet.
+async function getOpenLibraryRating(
+  key: string,
+): Promise<{ average?: number; count?: number }> {
+  try {
+    const res = await catalogFetch(`https://openlibrary.org${key}/ratings.json`, 60 * 60 * 24);
+    if (!res.ok) return {};
+    const data = (await res.json()) as { summary?: { average?: number; count?: number } };
+    return { average: data.summary?.average ?? undefined, count: data.summary?.count ?? undefined };
+  } catch {
+    return {};
+  }
+}
+
+async function getOpenLibraryAuthorName(key: string): Promise<string> {
+  try {
+    const res = await catalogFetch(`https://openlibrary.org${key}.json`, 60 * 60 * 24);
+    if (!res.ok) return "";
+    const a = (await res.json()) as { name?: string };
+    return a.name ?? "";
+  } catch {
+    return "";
+  }
+}
+
+async function getGoogleVolume(id: string): Promise<BookSearchResult | null> {
+  try {
+    const url = new URL(`${GOOGLE_BOOKS}/${id}`);
+    if (process.env.GOOGLE_BOOKS_API_KEY) {
+      url.searchParams.set("key", process.env.GOOGLE_BOOKS_API_KEY);
+    }
+    const res = await catalogFetch(url, 60 * 60 * 24);
+    if (!res.ok) return null;
+    const v = (await res.json()) as GoogleVolume;
+    return toBook(v);
+  } catch (err) {
+    console.warn("Google volume lookup failed:", (err as Error).message);
+    return null;
+  }
+}
+
+function toBook(v: GoogleVolume): BookSearchResult {
+  const info = v.volumeInfo ?? {};
+  const isbn13 = info.industryIdentifiers?.find((i) => i.type === "ISBN_13")?.identifier;
+  const year = info.publishedDate ? Number(info.publishedDate.slice(0, 4)) : undefined;
+  return {
+    externalId: v.id,
+    title: info.title ?? "Untitled",
+    subtitle: info.subtitle,
+    authors: info.authors ?? [],
+    description: info.description,
+    coverUrl: info.imageLinks?.thumbnail?.replace("http://", "https://"),
+    pageCount: info.pageCount,
+    publishedYear: Number.isFinite(year) ? year : undefined,
+    isbn13,
+    genres: info.categories ?? [],
+    averageRating: info.averageRating,
+    ratingsCount: info.ratingsCount,
+  };
+}

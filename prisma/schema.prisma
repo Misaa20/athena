@@ -1,0 +1,190 @@
+// Athena — Prisma schema
+// pgvector is used for AI-driven semantic recommendations.
+// After `prisma migrate` or `prisma db push`, run once against your DB:
+//   CREATE EXTENSION IF NOT EXISTS vector;
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions", "driverAdapters"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+enum ReadingStatus {
+  WANT_TO_READ
+  READING
+  FINISHED
+  DNF
+}
+
+model User {
+  id          String   @id @default(cuid())
+  privyId     String?  @unique // Privy DID, set on first authenticated request
+  email       String   @unique
+  username    String   @unique
+  displayName String?
+  bio         String?
+  avatarUrl   String?
+  // AI-generated reading personality (see /api/me/personality).
+  readerType     String?
+  tasteProfile   String?
+  tasteUpdatedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  entries        ReadingEntry[]
+  reviews        Review[]
+  notes          Note[]
+  quotes         Quote[]
+  following      Follow[]        @relation("follower")
+  followers      Follow[]        @relation("following")
+  reviewLikes    ReviewLike[]
+  reviewComments ReviewComment[]
+  goals          ReadingGoal[]
+}
+
+model Book {
+  id            String   @id @default(cuid())
+  externalId    String?  @unique // Google Books / OpenLibrary id
+  isbn13        String?  @unique
+  title         String
+  subtitle      String?
+  authors       String[]
+  description   String?
+  coverUrl      String?
+  pageCount     Int?
+  publishedYear Int?
+  genres        String[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  entries ReadingEntry[]
+  reviews Review[]
+  notes   Note[]
+  quotes  Quote[]
+
+  @@index([title])
+}
+
+model ReadingEntry {
+  id        String        @id @default(cuid())
+  userId    String
+  bookId    String
+  status    ReadingStatus @default(WANT_TO_READ)
+  rating    Int?          // 1..5
+  startedAt DateTime?
+  finishedAt DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+  @@index([userId, status])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  bookId    String
+  rating    Int      // 1..5
+  body      String
+  spoiler   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  likes    ReviewLike[]
+  comments ReviewComment[]
+
+  @@unique([userId, bookId])
+  @@index([bookId])
+}
+
+model ReviewLike {
+  userId    String
+  reviewId  String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@id([userId, reviewId])
+  @@index([reviewId])
+}
+
+model ReviewComment {
+  id        String   @id @default(cuid())
+  userId    String
+  reviewId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@index([reviewId])
+}
+
+model ReadingGoal {
+  userId    String
+  year      Int
+  target    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, year])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  userId    String
+  bookId    String
+  body      String
+  page      Int?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([userId, bookId])
+}
+
+model Quote {
+  id        String   @id @default(cuid())
+  userId    String
+  bookId    String
+  body      String
+  page      Int?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([userId, bookId])
+}
+
+model Follow {
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+}
+
+// Raw SQL adds a pgvector column for semantic recommendations.
+// Run after the rest of the schema is applied:
+//   ALTER TABLE "Book" ADD COLUMN IF NOT EXISTS embedding vector(1536);
+//   CREATE INDEX IF NOT EXISTS book_embedding_idx ON "Book" USING ivfflat (embedding vector_cosine_ops);

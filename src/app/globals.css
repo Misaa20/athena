@@ -1,0 +1,151 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body {
+  background-color: #17120b;
+  color: #ece0cc;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: #17120b;
+  background-image:
+    radial-gradient(55rem 38rem at 50% -12%, rgba(217, 168, 92, 0.14), transparent 60%),
+    radial-gradient(38rem 30rem at 105% 5%, rgba(161, 74, 89, 0.12), transparent 55%),
+    radial-gradient(40rem 32rem at -5% 30%, rgba(217, 168, 92, 0.06), transparent 55%),
+    radial-gradient(50rem 40rem at 80% 85%, rgba(161, 74, 89, 0.07), transparent 60%);
+  background-attachment: fixed;
+}
+
+.font-serif {
+  font-family: "Fraunces", "Iowan Old Style", "Apple Garamond", Baskerville, Georgia, serif;
+  font-optical-sizing: auto;
+}
+
+::selection {
+  background: rgba(217, 168, 92, 0.30);
+  color: #faf3e6;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #3b2e1f;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #6b5847;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.rule-gold {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(217, 168, 92, 0.5), transparent);
+  border: 0;
+}
+
+/* Subtle film-grain noise — adds depth to the candlelit background. */
+.noise::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Glassmorphism — translucent surface with light blur, gold ring on hover. */
+.glass {
+  background-color: rgba(36, 27, 18, 0.55);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid rgba(217, 168, 92, 0.10);
+}
+.glass:hover {
+  border-color: rgba(217, 168, 92, 0.35);
+}
+
+/* Gold gradient text. */
+.text-gradient-gold {
+  background: linear-gradient(135deg, #f5c97a 0%, #d9a85c 45%, #a14a59 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Animated gradient border — wraps any element with rounded corners. */
+.gradient-border {
+  position: relative;
+  isolation: isolate;
+}
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(217, 168, 92, 0.6), rgba(161, 74, 89, 0.4), rgba(217, 168, 92, 0.2));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Shimmer loading utility. */
+.shimmer {
+  background: linear-gradient(90deg, transparent, rgba(217, 168, 92, 0.08), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+@keyframes shimmer {
+  0% { background-position: -100% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Slow rotating conic gradient — backdrop for the hero halo. */
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+.spin-slow { animation: spin-slow 22s linear infinite; }
+
+/* Pulsing candle flicker — gentle opacity wobble. */
+@keyframes candle-flicker {
+  0%, 100% { opacity: 0.9; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+.candle-flicker { animation: candle-flicker 3.2s ease-in-out infinite; }
+
+/* Float — gentle vertical drift for hero covers. */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.float { animation: float 5s ease-in-out infinite; }
+.float-slow { animation: float 8s ease-in-out infinite; }
+
+/* Marquee — endless horizontal scroll (for category strip / quote strip). */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee { animation: marquee 50s linear infinite; }
+
+/* Aurora bands behind hero text. */
+@keyframes aurora {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  33%      { transform: translate3d(-15%, 8%, 0); }
+  66%      { transform: translate3d(12%, -6%, 0); }
+}
+.aurora { animation: aurora 18s ease-in-out infinite; }
