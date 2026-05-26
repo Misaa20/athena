@@ -135,38 +135,228 @@ function fromOpenLibrary(d: OpenLibraryDoc): BookSearchResult {
 const OPEN_LIBRARY_TRENDING = "https://openlibrary.org/trending/daily.json";
 const OPEN_LIBRARY_SUBJECT = "https://openlibrary.org/subjects";
 
-export type Category = { label: string; subject: string; description: string; featured?: boolean };
+export type SubGenre = { label: string; subject: string };
+export type Category = {
+  label: string;
+  subject: string;
+  description: string;
+  featured?: boolean;
+  subGenres?: SubGenre[];
+};
 
 // Genres available across the app. `featured` ones get a full shelf on the
 // /browse landing page (kept small so the page isn't fetching dozens of shelves
 // at once); the rest still appear in the nav menu and have their own genre page.
+// `subGenres` use real OpenLibrary subject slugs so each one has a working
+// /browse/[slug] page (the route accepts arbitrary subjects).
 export const CATEGORIES: Category[] = [
-  { label: "Fiction", subject: "fiction", featured: true, description: "Invented worlds and the stories we can’t put down." },
-  { label: "Science Fiction", subject: "science_fiction", featured: true, description: "Futures, far-off worlds, and what-ifs grounded in science." },
-  { label: "Fantasy", subject: "fantasy", featured: true, description: "Magic, myth, and epic quests beyond the edge of the map." },
-  { label: "Mystery & Thriller", subject: "mystery", featured: true, description: "Whodunits, twists, and pages that turn themselves." },
-  { label: "Romance", subject: "romance", featured: true, description: "Love stories, slow burns, and hard-won happy endings." },
-  { label: "History", subject: "history", featured: true, description: "True accounts of the people and events that shaped us." },
-  { label: "Philosophy", subject: "philosophy", featured: true, description: "Big questions about meaning, mind, and how to live." },
-  { label: "Biography", subject: "biography", featured: true, description: "The real lives of the remarkable and the ordinary." },
-  { label: "Horror", subject: "horror", description: "Dread, the uncanny, and things that go bump in the dark." },
+  {
+    label: "Fiction",
+    subject: "fiction",
+    featured: true,
+    description: "Invented worlds and the stories we can’t put down.",
+    subGenres: [
+      { label: "Literary", subject: "literary_fiction" },
+      { label: "Contemporary", subject: "contemporary_fiction" },
+      { label: "Historical", subject: "historical_fiction" },
+      { label: "Short stories", subject: "short_stories" },
+      { label: "Satire", subject: "satire" },
+    ],
+  },
+  {
+    label: "Science Fiction",
+    subject: "science_fiction",
+    featured: true,
+    description: "Futures, far-off worlds, and what-ifs grounded in science.",
+    subGenres: [
+      { label: "Space opera", subject: "space_opera" },
+      { label: "Cyberpunk", subject: "cyberpunk" },
+      { label: "Dystopian", subject: "dystopian" },
+      { label: "Time travel", subject: "time_travel" },
+      { label: "Hard sci-fi", subject: "hard_science_fiction" },
+      { label: "Alternate history", subject: "alternate_history" },
+    ],
+  },
+  {
+    label: "Fantasy",
+    subject: "fantasy",
+    featured: true,
+    description: "Magic, myth, and epic quests beyond the edge of the map.",
+    subGenres: [
+      { label: "Epic fantasy", subject: "epic_fantasy" },
+      { label: "Urban fantasy", subject: "urban_fantasy" },
+      { label: "Dark fantasy", subject: "dark_fantasy" },
+      { label: "High fantasy", subject: "high_fantasy" },
+      { label: "Sword & sorcery", subject: "sword_and_sorcery" },
+      { label: "Mythology", subject: "mythology" },
+    ],
+  },
+  {
+    label: "Mystery & Thriller",
+    subject: "mystery",
+    featured: true,
+    description: "Whodunits, twists, and pages that turn themselves.",
+    subGenres: [
+      { label: "Cozy mystery", subject: "cozy_mysteries" },
+      { label: "Crime", subject: "crime" },
+      { label: "Detective", subject: "detective_and_mystery_stories" },
+      { label: "Psychological thriller", subject: "psychological_thriller" },
+      { label: "Noir", subject: "noir" },
+      { label: "Legal thriller", subject: "legal_thriller" },
+    ],
+  },
+  {
+    label: "Romance",
+    subject: "romance",
+    featured: true,
+    description: "Love stories, slow burns, and hard-won happy endings.",
+    subGenres: [
+      { label: "Paranormal romance", subject: "paranormal_romance" },
+      { label: "Fantasy romance", subject: "fantasy_romance" },
+      { label: "Historical romance", subject: "historical_romance" },
+      { label: "Contemporary romance", subject: "contemporary_romance" },
+      { label: "Romantic suspense", subject: "romantic_suspense" },
+      { label: "Romantic comedy", subject: "romantic_comedy" },
+      { label: "Young adult romance", subject: "young_adult_romance" },
+    ],
+  },
+  {
+    label: "History",
+    subject: "history",
+    featured: true,
+    description: "True accounts of the people and events that shaped us.",
+    subGenres: [
+      { label: "World history", subject: "world_history" },
+      { label: "Ancient", subject: "ancient_history" },
+      { label: "Medieval", subject: "medieval_history" },
+      { label: "Military", subject: "military_history" },
+      { label: "American", subject: "united_states_history" },
+    ],
+  },
+  {
+    label: "Philosophy",
+    subject: "philosophy",
+    featured: true,
+    description: "Big questions about meaning, mind, and how to live.",
+    subGenres: [
+      { label: "Ethics", subject: "ethics" },
+      { label: "Metaphysics", subject: "metaphysics" },
+      { label: "Political philosophy", subject: "political_philosophy" },
+      { label: "Eastern philosophy", subject: "eastern_philosophy" },
+      { label: "Existentialism", subject: "existentialism" },
+    ],
+  },
+  {
+    label: "Biography",
+    subject: "biography",
+    featured: true,
+    description: "The real lives of the remarkable and the ordinary.",
+    subGenres: [
+      { label: "Autobiography", subject: "autobiography" },
+      { label: "Memoir", subject: "memoir" },
+      { label: "Historical figures", subject: "historical_biography" },
+    ],
+  },
+  {
+    label: "Horror",
+    subject: "horror",
+    description: "Dread, the uncanny, and things that go bump in the dark.",
+    subGenres: [
+      { label: "Gothic", subject: "gothic_fiction" },
+      { label: "Psychological", subject: "psychological_horror" },
+      { label: "Supernatural", subject: "supernatural" },
+      { label: "Occult", subject: "occult_fiction" },
+    ],
+  },
   { label: "Poetry", subject: "poetry", description: "Language at its most distilled and resonant." },
-  { label: "Young Adult", subject: "young_adult", description: "Coming-of-age stories with heart and high stakes." },
-  { label: "Science", subject: "science", description: "How the universe works, from atoms to galaxies." },
-  { label: "Psychology", subject: "psychology", description: "The mind, behavior, and what makes us tick." },
-  { label: "Business", subject: "business", description: "Strategy, work, money, and building things that last." },
-  { label: "Art", subject: "art", description: "Movements, makers, and the craft of seeing." },
-  { label: "Travel", subject: "travel", description: "Journeys, places, and the world beyond your door." },
+  {
+    label: "Young Adult",
+    subject: "young_adult",
+    description: "Coming-of-age stories with heart and high stakes.",
+    subGenres: [
+      { label: "YA fantasy", subject: "young_adult_fantasy" },
+      { label: "YA romance", subject: "young_adult_romance" },
+      { label: "YA dystopian", subject: "young_adult_dystopian" },
+      { label: "Coming of age", subject: "coming_of_age" },
+    ],
+  },
+  {
+    label: "Science",
+    subject: "science",
+    description: "How the universe works, from atoms to galaxies.",
+    subGenres: [
+      { label: "Physics", subject: "physics" },
+      { label: "Biology", subject: "biology" },
+      { label: "Chemistry", subject: "chemistry" },
+      { label: "Astronomy", subject: "astronomy" },
+      { label: "Mathematics", subject: "mathematics" },
+    ],
+  },
+  {
+    label: "Psychology",
+    subject: "psychology",
+    description: "The mind, behavior, and what makes us tick.",
+    subGenres: [
+      { label: "Cognitive", subject: "cognitive_psychology" },
+      { label: "Social", subject: "social_psychology" },
+      { label: "Behavioral", subject: "behavioral_psychology" },
+      { label: "Self-help", subject: "self_help" },
+    ],
+  },
+  {
+    label: "Business",
+    subject: "business",
+    description: "Strategy, work, money, and building things that last.",
+    subGenres: [
+      { label: "Leadership", subject: "leadership" },
+      { label: "Entrepreneurship", subject: "entrepreneurship" },
+      { label: "Marketing", subject: "marketing" },
+      { label: "Personal finance", subject: "personal_finance" },
+      { label: "Economics", subject: "economics" },
+    ],
+  },
+  {
+    label: "Art",
+    subject: "art",
+    description: "Movements, makers, and the craft of seeing.",
+    subGenres: [
+      { label: "Art history", subject: "art_history" },
+      { label: "Painting", subject: "painting" },
+      { label: "Photography", subject: "photography" },
+      { label: "Architecture", subject: "architecture" },
+    ],
+  },
+  {
+    label: "Travel",
+    subject: "travel",
+    description: "Journeys, places, and the world beyond your door.",
+    subGenres: [
+      { label: "Travel writing", subject: "travel_writing" },
+      { label: "Adventure", subject: "adventure" },
+    ],
+  },
 ];
+
+// Given a subject slug (parent or sub), return its parent Category if it's a
+// sub-genre — used to render breadcrumbs and sibling chips on sub-genre pages.
+export function parentCategory(subject: string): Category | undefined {
+  return CATEGORIES.find((c) => c.subGenres?.some((s) => s.subject === subject));
+}
 
 // Shelves shown on the /browse landing page.
 export const FEATURED_CATEGORIES = CATEGORIES.filter((c) => c.featured);
 
 // Resolve a genre's display label from its subject slug, prettifying unknown
 // subjects (e.g. "young_adult" → "Young Adult") so arbitrary genre pages render.
+// Also checks sub-genre labels so "paranormal_romance" → "Paranormal romance"
+// (the curated label) rather than the generic title-cased fallback.
 export function categoryLabel(subject: string): string {
   const known = CATEGORIES.find((c) => c.subject === subject);
   if (known) return known.label;
+  for (const c of CATEGORIES) {
+    const sub = c.subGenres?.find((s) => s.subject === subject);
+    if (sub) return sub.label;
+  }
   return subject
     .split(/[_-]+/)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
@@ -174,9 +364,14 @@ export function categoryLabel(subject: string): string {
 }
 
 // One-line blurb for a genre, with a sensible fallback for unknown subjects.
+// Sub-genres inherit a softer "within Romance" description rather than echoing
+// the parent's blurb verbatim.
 export function categoryDescription(subject: string): string {
   const known = CATEGORIES.find((c) => c.subject === subject);
-  return known?.description ?? `A shelf of ${categoryLabel(subject).toLowerCase()} titles to explore.`;
+  if (known) return known.description;
+  const parent = parentCategory(subject);
+  if (parent) return `A corner of ${parent.label.toLowerCase()} — ${categoryLabel(subject).toLowerCase()} titles to explore.`;
+  return `A shelf of ${categoryLabel(subject).toLowerCase()} titles to explore.`;
 }
 
 type OpenLibraryWork = {

@@ -1,17 +1,29 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Layers } from "lucide-react";
 import { BookCard } from "@/components/book-card";
 import { LoadMoreBooks } from "@/components/load-more-books";
-import { CATEGORIES, categoryDescription, categoryLabel, getSubjectPage } from "@/lib/books";
+import {
+  CATEGORIES,
+  categoryDescription,
+  categoryLabel,
+  getSubjectPage,
+  parentCategory,
+} from "@/lib/books";
 
 export const revalidate = 3600;
 
 const PAGE_SIZE = 24;
 
-// Pre-render the known genres; arbitrary subjects still work on demand.
+// Pre-render the known genres AND their sub-genres; arbitrary subjects still
+// work on demand.
 export function generateStaticParams() {
-  return CATEGORIES.map((c) => ({ subject: c.subject }));
+  const params: { subject: string }[] = [];
+  for (const c of CATEGORIES) {
+    params.push({ subject: c.subject });
+    for (const s of c.subGenres ?? []) params.push({ subject: s.subject });
+  }
+  return params;
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ subject: string }> }) {
@@ -30,17 +42,39 @@ export default async function GenrePage({ params }: { params: Promise<{ subject:
   if (ok && total === 0) notFound();
 
   const hasMore = PAGE_SIZE < total;
+  // If this slug is a sub-genre, pull its parent so we can render a breadcrumb
+  // back to the parent + sibling sub-genre chips.
+  const parent = parentCategory(subject);
+  // Sub-genres of the *current* category (when viewing a parent).
+  const parentCat = CATEGORIES.find((c) => c.subject === subject);
+  const subGenres = parent?.subGenres ?? parentCat?.subGenres ?? [];
 
   return (
     <div className="space-y-10">
       <header className="space-y-4">
-        <Link
-          href="/browse"
-          className="inline-flex items-center gap-1.5 text-sm text-ink-900/60 transition hover:text-accent"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          All of Browse
-        </Link>
+        <div className="flex flex-wrap items-center gap-3 text-sm text-ink-900/60">
+          <Link
+            href="/browse"
+            className="inline-flex items-center gap-1.5 transition hover:text-accent"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            All of Browse
+          </Link>
+          {parent && (
+            <>
+              <span className="text-ink-900/30">·</span>
+              <Link
+                href={`/browse/${parent.subject}`}
+                className="transition hover:text-accent"
+              >
+                {parent.label}
+              </Link>
+              <span className="text-ink-900/30">·</span>
+              <span className="text-ink-900/80">{label}</span>
+            </>
+          )}
+        </div>
+
         <div>
           <h1 className="font-serif text-4xl text-ink-900">{label}</h1>
           <p className="mt-2 max-w-2xl text-ink-900/70">{description}</p>
@@ -51,21 +85,65 @@ export default async function GenrePage({ params }: { params: Promise<{ subject:
           )}
         </div>
 
-        {/* Quick jump to other genres */}
+        {/* Sub-genre chips. Shows children when on a parent, siblings when on
+            a sub-genre. Hidden when neither has any. */}
+        {subGenres.length > 0 && (
+          <div className="rounded-xl border border-ink-200/60 bg-ink-100/30 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <Layers className="h-3.5 w-3.5 text-accent" />
+              <p className="text-xs uppercase tracking-[0.2em] text-ink-900/55">
+                {parent ? `More in ${parent.label}` : "Browse by sub-genre"}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-sm">
+              {/* "All <parent>" pill so users can navigate back to the broad shelf. */}
+              {parent && (
+                <Link
+                  href={`/browse/${parent.subject}`}
+                  className="rounded-full border border-ink-200 px-3 py-1 text-ink-900/65 transition hover:border-accent/50 hover:text-accent"
+                >
+                  All {parent.label.toLowerCase()}
+                </Link>
+              )}
+              {subGenres.map((s) => {
+                const active = s.subject === subject;
+                return (
+                  <Link
+                    key={s.subject}
+                    href={`/browse/${s.subject}`}
+                    className={
+                      active
+                        ? "rounded-full border border-accent/50 bg-accent/15 px-3 py-1 text-accent"
+                        : "rounded-full border border-ink-200 px-3 py-1 text-ink-900/70 transition hover:border-accent/50 hover:text-accent"
+                    }
+                  >
+                    {s.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Quick jump to other top-level genres */}
         <nav className="flex flex-wrap gap-2 text-sm">
-          {CATEGORIES.map((c) => (
-            <Link
-              key={c.subject}
-              href={`/browse/${c.subject}`}
-              className={
-                c.subject === subject
-                  ? "rounded-md border border-accent/50 bg-accent/10 px-3 py-1.5 text-accent"
-                  : "rounded-md border border-ink-200 px-3 py-1.5 text-ink-900/70 hover:bg-ink-100"
-              }
-            >
-              {c.label}
-            </Link>
-          ))}
+          {CATEGORIES.map((c) => {
+            const isCurrent = c.subject === subject;
+            const isParentOfCurrent = parent?.subject === c.subject;
+            return (
+              <Link
+                key={c.subject}
+                href={`/browse/${c.subject}`}
+                className={
+                  isCurrent || isParentOfCurrent
+                    ? "rounded-md border border-accent/50 bg-accent/10 px-3 py-1.5 text-accent"
+                    : "rounded-md border border-ink-200 px-3 py-1.5 text-ink-900/70 hover:bg-ink-100"
+                }
+              >
+                {c.label}
+              </Link>
+            );
+          })}
         </nav>
       </header>
 
