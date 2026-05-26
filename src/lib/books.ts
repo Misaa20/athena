@@ -302,17 +302,37 @@ export function cleanDescription(raw?: string | null): string | undefined {
   if (!raw) return undefined;
   let text = raw;
 
-  // Drop markdown links whose visible text or URL screams spam. Keep clean
-  // links by collapsing them to their visible text.
+  // 1. Drop markdown reference definitions ("[1]: https://en.wikipedia.org/...")
+  //    that OpenLibrary editors paste at the end of summaries as Wikipedia
+  //    citations. These leave dangling `[1]` markers in the visible body, so
+  //    they're handled in step 3.
+  text = text.replace(/^[ \t]*\[[^\]]+\]:[ \t]*\S.*$/gm, "");
+
+  // 2. Drop inline markdown links whose visible text or URL screams spam
+  //    (piracy / "Download PDF"). Keep benign inline links by collapsing them
+  //    to just the visible text.
   text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label: string, url: string) => {
     if (SPAM_TOKENS.test(label) || SPAM_TOKENS.test(url)) return "";
     return label;
   });
 
-  // Drop the "----" OpenLibrary separator before publisher boilerplate.
+  // 3. Drop markdown reference-style links: `[text][id]`. These are usually
+  //    citation pointers ("[Wikipedia][1]") whose footnote was stripped in
+  //    step 1, so the bracketed label adds nothing — drop the whole thing.
+  //    Also clean up surrounding parens, e.g. "( [Wikipedia][1] )" → "".
+  text = text.replace(/\(\s*\[([^\]]+)\]\[[^\]]+\]\s*\)/g, "");
+  text = text.replace(/\[([^\]]+)\]\[[^\]]+\]/g, "");
+
+  // 4. Drop orphan footnote markers left behind on their own line ("[1]").
+  text = text.replace(/^[ \t]*\[\d+\][ \t]*$/gm, "");
+
+  // 5. Drop bare "(Source: ...)" / "(Wikipedia)" attribution tails.
+  text = text.replace(/\(\s*(source|wikipedia|via)[^)]*\)/gi, "");
+
+  // 6. Drop the OpenLibrary "---" separator before publisher boilerplate.
   text = text.replace(/\n-{3,}[\s\S]*$/, "");
 
-  // Strip lines that are mostly a URL, or that combine spam keywords + a URL.
+  // 7. Strip lines that are mostly a URL, or that combine spam keywords + URL.
   text = text
     .split(/\r?\n/)
     .filter((line) => {
@@ -324,11 +344,15 @@ export function cleanDescription(raw?: string | null): string | undefined {
     })
     .join("\n");
 
-  // Strip bare URLs left over in mid-sentence.
+  // 8. Strip bare URLs left over in mid-sentence.
   text = text.replace(/https?:\/\/\S+/g, "").trim();
 
-  // Collapse runs of blank lines and trailing punctuation orphans.
-  text = text.replace(/\n{3,}/g, "\n\n").replace(/[\s,;:()-]+$/g, "").trim();
+  // 9. Collapse runs of blank lines and trailing punctuation orphans.
+  text = text
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/[\s,;:()-]+$/g, "")
+    .trim();
 
   return text || undefined;
 }
