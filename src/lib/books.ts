@@ -287,6 +287,48 @@ export async function getSubjectPage(
   return { books: [], total: 0, ok: false };
 }
 
+// OpenLibrary descriptions are wiki-style and frequently end with SEO spam
+// injected by random editors: piracy links, "Download free pdf" lines,
+// affiliate URLs, "Read online" callouts, etc. Strip those before display so
+// readers see the actual summary and nothing else.
+const SPAM_TOKENS =
+  /\b(pdf|epub|mobi|kindle|audiobook|download|read online|free book|full book|torrent|ebook|isbn[- ]?\d|buy now)\b/i;
+
+export function cleanDescription(raw?: string | null): string | undefined {
+  if (!raw) return undefined;
+  let text = raw;
+
+  // Drop markdown links whose visible text or URL screams spam. Keep clean
+  // links by collapsing them to their visible text.
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label: string, url: string) => {
+    if (SPAM_TOKENS.test(label) || SPAM_TOKENS.test(url)) return "";
+    return label;
+  });
+
+  // Drop the "----" OpenLibrary separator before publisher boilerplate.
+  text = text.replace(/\n-{3,}[\s\S]*$/, "");
+
+  // Strip lines that are mostly a URL, or that combine spam keywords + a URL.
+  text = text
+    .split(/\r?\n/)
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return true;
+      if (/^https?:\/\/\S+\s*$/i.test(trimmed)) return false;
+      if (SPAM_TOKENS.test(trimmed) && /https?:\/\//i.test(trimmed)) return false;
+      return true;
+    })
+    .join("\n");
+
+  // Strip bare URLs left over in mid-sentence.
+  text = text.replace(/https?:\/\/\S+/g, "").trim();
+
+  // Collapse runs of blank lines and trailing punctuation orphans.
+  text = text.replace(/\n{3,}/g, "\n\n").replace(/[\s,;:()-]+$/g, "").trim();
+
+  return text || undefined;
+}
+
 // --- Single-book lookup by external id -----------------------------------
 // Powers the /books/external/[...externalId] detail page (search results and
 // shelf covers that aren't in our DB yet). Returns null when the book can't be
@@ -312,7 +354,9 @@ async function getOpenLibraryWork(key: string): Promise<BookSearchResult | null>
     const res = await catalogFetch(`https://openlibrary.org${key}.json`, 60 * 60 * 24);
     if (!res.ok) return null;
     const w = (await res.json()) as OpenLibraryWorkDetail;
-    let description = typeof w.description === "string" ? w.description : w.description?.value;
+    let description = cleanDescription(
+      typeof w.description === "string" ? w.description : w.description?.value,
+    );
     let coverId = Array.isArray(w.covers) ? w.covers.find((c) => c > 0) : undefined;
     const authorKeys = (w.authors ?? [])
       .map((a) => a.author?.key)
@@ -397,7 +441,8 @@ async function getFirstUsefulEdition(workKey: string): Promise<{
         coverId = (e.covers ?? []).find((c) => c > 0);
       }
       if (!description) {
-        const d = typeof e.description === "string" ? e.description : e.description?.value;
+        const raw = typeof e.description === "string" ? e.description : e.description?.value;
+        const d = cleanDescription(raw);
         if (d) description = d;
       }
       if (!isbn13) isbn13 = e.isbn_13?.[0];
@@ -465,7 +510,7 @@ function toBook(v: GoogleVolume): BookSearchResult {
     title: info.title ?? "Untitled",
     subtitle: info.subtitle,
     authors: info.authors ?? [],
-    description: info.description,
+    description: cleanDescription(info.description),
     coverUrl: info.imageLinks?.thumbnail?.replace("http://", "https://"),
     pageCount: info.pageCount,
     publishedYear: Number.isFinite(year) ? year : undefined,

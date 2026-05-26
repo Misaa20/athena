@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { cleanDescription } from "@/lib/books";
 
 // A catalog book the client wants to act on. When a book is reached from search
 // results or shelves it isn't in our DB yet, so the client sends the full
@@ -33,7 +34,9 @@ export async function resolveBookId(input: {
     return exists?.id ?? null;
   }
   if (!input.book) return null;
-  const data = input.book;
+  // Strip catalog-injected piracy links / "Download PDF" lines before the
+  // description hits the DB, so re-shelving a book also heals legacy spam.
+  const data = { ...input.book, description: cleanDescription(input.book.description) };
 
   if (data.externalId) {
     const book = await db.book.upsert({

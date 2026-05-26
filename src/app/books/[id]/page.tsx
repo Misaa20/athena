@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { BookOpen } from "lucide-react";
 import { db } from "@/lib/db";
+import { cleanDescription } from "@/lib/books";
 import { StarRating } from "@/components/star-rating";
 import { BookActions } from "@/components/book-actions";
 import { BookCover } from "@/components/book-cover";
@@ -25,6 +26,9 @@ export default async function BookPage({ params }: { params: Promise<{ id: strin
   });
   const averageRating = agg._avg.rating ?? undefined;
   const ratingsCount = agg._count.rating;
+  // Strip spam (piracy links / "Download PDF" lines) from descriptions saved
+  // before the catalog-side sanitizer was in place.
+  const cleanedDescription = cleanDescription(book.description);
 
   return (
     <article className="grid gap-10 md:grid-cols-[200px_1fr]">
@@ -51,11 +55,11 @@ export default async function BookPage({ params }: { params: Promise<{ id: strin
           <p className="text-sm text-ink-900/50">No rating yet</p>
         )}
 
-        {book.description ? (
+        {cleanedDescription ? (
           <div>
             <h2 className="font-serif text-lg text-ink-900">Summary</h2>
             <p className="mt-1 max-w-2xl whitespace-pre-line text-ink-900/80">
-              {book.description}
+              {cleanedDescription}
             </p>
           </div>
         ) : (
