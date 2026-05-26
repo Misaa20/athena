@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Heart, Eye, EyeOff, Check } from "lucide-react";
 import { usePrivy } from "@privy-io/react-auth";
 import { authedFetch } from "@/lib/client";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,13 @@ function Inner({ bookId, book }: Props) {
 
   const [status, setStatus] = useState<Status | null>(null);
   const [savingShelf, setSavingShelf] = useState<Status | null>(null);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [savingFavorite, setSavingFavorite] = useState(false);
+  const [customShelves, setCustomShelves] = useState<
+    { id: string; name: string; isPublic: boolean }[]
+  >([]);
+  const [onShelves, setOnShelves] = useState<Set<string>>(new Set());
+  const [savingCustomShelf, setSavingCustomShelf] = useState<string | null>(null);
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewBody, setReviewBody] = useState("");
   const [hasReview, setHasReview] = useState(false);
@@ -70,16 +78,24 @@ function Inner({ bookId, book }: Props) {
   useEffect(() => {
     if (!authenticated || !lookupKey) return;
     const param = bookId ? `bookId=${bookId}` : `externalId=${encodeURIComponent(book.externalId!)}`;
-    authedFetch<{ entry: { status: Status; rating: number | null } | null; review: { rating: number; body: string } | null }>(
-      `/api/me/book?${param}`,
-    )
+    authedFetch<{
+      entry: { status: Status; rating: number | null; isFavorite?: boolean } | null;
+      review: { rating: number; body: string } | null;
+      shelves?: { id: string; name: string; isPublic: boolean }[];
+      onShelves?: string[];
+    }>(`/api/me/book?${param}`)
       .then((data) => {
-        if (data.entry) setStatus(data.entry.status);
+        if (data.entry) {
+          setStatus(data.entry.status);
+          setIsFavorite(Boolean(data.entry.isFavorite));
+        }
         if (data.review) {
           setReviewRating(data.review.rating);
           setReviewBody(data.review.body);
           setHasReview(true);
         }
+        if (data.shelves) setCustomShelves(data.shelves);
+        if (data.onShelves) setOnShelves(new Set(data.onShelves));
       })
       .catch(() => {});
   }, [authenticated, lookupKey, bookId, book.externalId]);
@@ -114,6 +130,66 @@ function Inner({ bookId, book }: Props) {
       setError((e as Error).message || "Couldn’t save. Try again.");
     } finally {
       setSavingShelf(null);
+    }
+  }
+
+  async function toggleFavorite() {
+    setError(null);
+    setMessage(null);
+    setSavingFavorite(true);
+    const next = !isFavorite;
+    try {
+      await authedFetch("/api/me/favorites", {
+        method: "POST",
+        body: JSON.stringify({ value: next, ...(bookId ? { bookId } : { book }) }),
+      });
+      setIsFavorite(next);
+      // Favoriting auto-creates a WANT_TO_READ entry server-side if the book
+      // wasn't shelved yet — mirror that locally so the shelf buttons sync.
+      if (next && !status) setStatus("WANT_TO_READ");
+      setMessage(next ? "Added to favorites." : "Removed from favorites.");
+    } catch (e) {
+      setError((e as Error).message || "Couldn't update favorite.");
+    } finally {
+      setSavingFavorite(false);
+    }
+  }
+
+  async function toggleCustomShelf(shelfId: string) {
+    setError(null);
+    setMessage(null);
+    setSavingCustomShelf(shelfId);
+    const isOn = onShelves.has(shelfId);
+    try {
+      if (isOn) {
+        // For DELETE we need an actual bookId, so resolve via the same upsert
+        // path POST takes. Cheat: POST to library first (idempotent) if no bookId,
+        // then DELETE. Simpler: only allow remove when we already have a bookId.
+        if (!bookId) {
+          // We need a bookId to remove. Add to library first to resolve one,
+          // then DELETE. (POST is idempotent in practice for the shelf endpoint.)
+          setError("Add the book to a shelf first to manage custom shelves.");
+          return;
+        }
+        await authedFetch(`/api/me/shelves/${shelfId}/books?bookId=${bookId}`, {
+          method: "DELETE",
+        });
+      } else {
+        await authedFetch(`/api/me/shelves/${shelfId}/books`, {
+          method: "POST",
+          body: JSON.stringify(bookId ? { bookId } : { book }),
+        });
+      }
+      setOnShelves((prev) => {
+        const next = new Set(prev);
+        if (isOn) next.delete(shelfId);
+        else next.add(shelfId);
+        return next;
+      });
+    } catch (e) {
+      setError((e as Error).message || "Couldn't update shelf.");
+    } finally {
+      setSavingCustomShelf(null);
     }
   }
 
@@ -180,7 +256,30 @@ function Inner({ bookId, book }: Props) {
   return (
     <div className="space-y-5 rounded-lg border border-ink-200 p-4">
       <div>
-        <p className="mb-2 text-sm font-medium text-ink-900">Add to your shelves</p>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <p className="text-sm font-medium text-ink-900">Add to your shelves</p>
+          <button
+            type="button"
+            onClick={toggleFavorite}
+            disabled={savingFavorite}
+            aria-pressed={isFavorite}
+            title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+            className={cn(
+              "group inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition disabled:opacity-60",
+              isFavorite
+                ? "border-wine/50 bg-wine/15 text-wine"
+                : "border-ink-200 text-ink-900/65 hover:border-wine/40 hover:text-wine",
+            )}
+          >
+            <Heart
+              className={cn(
+                "h-3.5 w-3.5 transition",
+                isFavorite ? "fill-wine text-wine" : "group-hover:scale-110",
+              )}
+            />
+            {isFavorite ? "Favorite" : "Favorite"}
+          </button>
+        </div>
         <div className="flex flex-wrap gap-2">
           {SHELVES.map((s) => (
             <button
@@ -199,6 +298,40 @@ function Inner({ bookId, book }: Props) {
           ))}
         </div>
       </div>
+
+      {customShelves.length > 0 && (
+        <div className="border-t border-ink-200 pt-4">
+          <p className="mb-2 text-sm font-medium text-ink-900">My shelves</p>
+          <div className="flex flex-wrap gap-2">
+            {customShelves.map((s) => {
+              const on = onShelves.has(s.id);
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => toggleCustomShelf(s.id)}
+                  disabled={savingCustomShelf !== null}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition disabled:opacity-50",
+                    on
+                      ? "border-accent bg-accent/15 text-accent"
+                      : "border-ink-200 text-ink-900/70 hover:border-accent/40 hover:text-ink-900",
+                  )}
+                  title={s.isPublic ? "Public shelf" : "Private shelf"}
+                >
+                  {on && <Check className="h-3 w-3" />}
+                  <span>{s.name}</span>
+                  {s.isPublic ? (
+                    <Eye className="h-2.5 w-2.5 opacity-60" />
+                  ) : (
+                    <EyeOff className="h-2.5 w-2.5 opacity-60" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <form onSubmit={submitReview} className="space-y-3 border-t border-ink-200 pt-4">
         <p className="text-sm font-medium text-ink-900">

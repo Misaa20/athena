@@ -5,6 +5,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { BookCard } from "@/components/book-card";
+import { MyShelves } from "@/components/my-shelves";
 import { authedFetch } from "@/lib/client";
 import type { BookSearchResult } from "@/lib/books";
 
@@ -105,6 +106,14 @@ export default function LibraryPage() {
             ))}
           </div>
         </section>
+      )}
+
+      {authenticated && (
+        <>
+          <hr className="rule-gold" />
+          <MyShelves />
+          <hr className="rule-gold" />
+        </>
       )}
 
       <section>

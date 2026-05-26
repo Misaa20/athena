@@ -45,6 +45,7 @@ model User {
   reviewLikes    ReviewLike[]
   reviewComments ReviewComment[]
   goals          ReadingGoal[]
+  shelves        Shelf[]
 }
 
 model Book {
@@ -62,10 +63,11 @@ model Book {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  entries ReadingEntry[]
-  reviews Review[]
-  notes   Note[]
-  quotes  Quote[]
+  entries      ReadingEntry[]
+  reviews      Review[]
+  notes        Note[]
+  quotes       Quote[]
+  shelfEntries ShelfEntry[]
 
   @@index([title])
 }
@@ -76,6 +78,7 @@ model ReadingEntry {
   bookId    String
   status    ReadingStatus @default(WANT_TO_READ)
   rating    Int?          // 1..5
+  isFavorite Boolean      @default(false)
   startedAt DateTime?
   finishedAt DateTime?
   createdAt DateTime      @default(now())
@@ -86,6 +89,39 @@ model ReadingEntry {
 
   @@unique([userId, bookId])
   @@index([userId, status])
+  @@index([userId, isFavorite])
+}
+
+// User-created shelves on top of the default WANT_TO_READ/READING/FINISHED/DNF
+// statuses. A book can sit on multiple custom shelves at once and still have a
+// ReadingEntry (or not — a user can curate a recommendation shelf for books
+// they haven't read). isPublic controls whether the shelf shows on the
+// public profile.
+model Shelf {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  isPublic  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries ShelfEntry[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model ShelfEntry {
+  shelfId   String
+  bookId    String
+  createdAt DateTime @default(now())
+
+  shelf Shelf @relation(fields: [shelfId], references: [id], onDelete: Cascade)
+  book  Book  @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@id([shelfId, bookId])
+  @@index([bookId])
 }
 
 model Review {

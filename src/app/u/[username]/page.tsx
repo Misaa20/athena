@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Heart, Eye } from "lucide-react";
 import { db } from "@/lib/db";
 import { BookCard } from "@/components/book-card";
 import { ReviewCard } from "@/components/review-card";
@@ -32,6 +32,31 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
   });
 
   if (!user) notFound();
+
+  // Favorites + public custom shelves. Fetched separately so the include above
+  // stays small; each is cheap (count-bounded) and runs in parallel with goal.
+  const [favoriteEntries, publicShelves] = await Promise.all([
+    db.readingEntry.findMany({
+      where: { userId: user.id, isFavorite: true },
+      include: { book: { select: { id: true, title: true, authors: true, coverUrl: true } } },
+      orderBy: { updatedAt: "desc" },
+      take: 12,
+    }),
+    db.shelf.findMany({
+      where: { userId: user.id, isPublic: true },
+      orderBy: { createdAt: "asc" },
+      include: {
+        _count: { select: { entries: true } },
+        entries: {
+          orderBy: { createdAt: "desc" },
+          take: 6,
+          include: {
+            book: { select: { id: true, title: true, authors: true, coverUrl: true } },
+          },
+        },
+      },
+    }),
+  ]);
 
   const [goal, readThisYear] = await Promise.all([
     db.readingGoal.findUnique({ where: { userId_year: { userId: user.id, year } } }),
@@ -109,9 +134,64 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
         )}
       </section>
 
+      {favoriteEntries.length > 0 && (
+        <section>
+          <div className="mb-4 flex items-center gap-2">
+            <Heart className="h-4 w-4 fill-wine text-wine" />
+            <h2 className="font-serif text-2xl text-ink-900">Favorites</h2>
+            <span className="text-sm text-ink-900/45">· {favoriteEntries.length}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-6">
+            {favoriteEntries.map((e) => (
+              <BookCard
+                key={e.id}
+                id={e.book.id}
+                title={e.book.title}
+                authors={e.book.authors}
+                coverUrl={e.book.coverUrl}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {publicShelves.length > 0 && (
+        <section className="space-y-8">
+          <div className="flex items-center gap-2">
+            <Eye className="h-4 w-4 text-accent" />
+            <h2 className="font-serif text-2xl text-ink-900">Shelves</h2>
+          </div>
+          {publicShelves.map((s) => (
+            <div key={s.id} className="space-y-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <h3 className="font-serif text-lg text-ink-900">{s.name}</h3>
+                <span className="text-xs text-ink-900/45">
+                  {s._count.entries} {s._count.entries === 1 ? "book" : "books"}
+                </span>
+              </div>
+              {s.entries.length === 0 ? (
+                <p className="text-sm text-ink-900/45">Empty shelf.</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-6">
+                  {s.entries.map((e) => (
+                    <BookCard
+                      key={e.book.id}
+                      id={e.book.id}
+                      title={e.book.title}
+                      authors={e.book.authors}
+                      coverUrl={e.book.coverUrl}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
+
       {user.entries.length > 0 && (
         <section>
-          <h2 className="mb-4 font-serif text-2xl text-ink-900">Shelves</h2>
+          <h2 className="mb-4 font-serif text-2xl text-ink-900">Recent activity</h2>
           <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-6">
             {user.entries.map((e) => (
               <BookCard
