@@ -15,6 +15,10 @@ const CATALOG_UA =
 // Hard timeout on every catalog request. Without this, Node's fetch can stall
 // for ~60s on IPv6 connect timeouts when OL/Google routes flap, which then
 // cascades into 500s on the search/detail routes (or hangs the whole page).
+// Callers that fan out many requests (landing shelves) can keep the default;
+// single-book detail lookups should pass a longer timeout — a 6s ceiling is
+// brutal when OL is responding in 8–10s from a Vercel cold start, and a
+// single 404 there feels like the app is broken.
 async function catalogFetch(url: string | URL, revalidate: number, timeoutMs = 6000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -350,10 +354,26 @@ type OpenLibraryWorkDetail = {
 };
 
 async function getOpenLibraryWork(key: string): Promise<BookSearchResult | null> {
+  // Retry once on transient failure. OL is the only catalog we hit for this
+  // lookup, so if we 404 here the page 404s — be forgiving, not strict.
+  const delays = [0, 600, 1500];
+  let w: OpenLibraryWorkDetail | null = null;
+  for (const delay of delays) {
+    if (delay) await new Promise((r) => setTimeout(r, delay));
+    try {
+      const res = await catalogFetch(`https://openlibrary.org${key}.json`, 60 * 60 * 24, 12000);
+      if (!res.ok) {
+        if (res.status === 404) return null; // genuinely doesn't exist; don't retry
+        continue;
+      }
+      w = (await res.json()) as OpenLibraryWorkDetail;
+      break;
+    } catch {
+      // Network / abort — fall through to next retry
+    }
+  }
+  if (!w) return null;
   try {
-    const res = await catalogFetch(`https://openlibrary.org${key}.json`, 60 * 60 * 24);
-    if (!res.ok) return null;
-    const w = (await res.json()) as OpenLibraryWorkDetail;
     let description = cleanDescription(
       typeof w.description === "string" ? w.description : w.description?.value,
     );
@@ -486,19 +506,27 @@ async function getOpenLibraryAuthorName(key: string): Promise<string> {
 }
 
 async function getGoogleVolume(id: string): Promise<BookSearchResult | null> {
-  try {
-    const url = new URL(`${GOOGLE_BOOKS}/${id}`);
-    if (process.env.GOOGLE_BOOKS_API_KEY) {
-      url.searchParams.set("key", process.env.GOOGLE_BOOKS_API_KEY);
-    }
-    const res = await catalogFetch(url, 60 * 60 * 24);
-    if (!res.ok) return null;
-    const v = (await res.json()) as GoogleVolume;
-    return toBook(v);
-  } catch (err) {
-    console.warn("Google volume lookup failed:", (err as Error).message);
-    return null;
+  const url = new URL(`${GOOGLE_BOOKS}/${id}`);
+  if (process.env.GOOGLE_BOOKS_API_KEY) {
+    url.searchParams.set("key", process.env.GOOGLE_BOOKS_API_KEY);
   }
+  const delays = [0, 600, 1500];
+  for (const delay of delays) {
+    if (delay) await new Promise((r) => setTimeout(r, delay));
+    try {
+      const res = await catalogFetch(url, 60 * 60 * 24, 12000);
+      if (!res.ok) {
+        if (res.status === 404) return null;
+        continue;
+      }
+      const v = (await res.json()) as GoogleVolume;
+      return toBook(v);
+    } catch {
+      // Network / abort — retry
+    }
+  }
+  console.warn("Google volume lookup failed after retries:", id);
+  return null;
 }
 
 function toBook(v: GoogleVolume): BookSearchResult {

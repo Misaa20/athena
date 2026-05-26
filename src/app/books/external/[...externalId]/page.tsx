@@ -1,5 +1,5 @@
-import { notFound } from "next/navigation";
-import { BookOpen } from "lucide-react";
+import Link from "next/link";
+import { BookOpen, ArrowLeft, RotateCw } from "lucide-react";
 import { getBookByExternalId } from "@/lib/books";
 import { db } from "@/lib/db";
 import { StarRating } from "@/components/star-rating";
@@ -20,7 +20,10 @@ export default async function ExternalBookPage({
   const id = externalId.map(decodeURIComponent).join("/");
   const book = await getBookByExternalId(id);
 
-  if (!book) notFound();
+  // If the catalog lookup couldn't reach OL/Google (cold start, rate limit,
+  // timeout), render a graceful retry page instead of a hard 404 — the book
+  // very likely exists, we just couldn't load it this time.
+  if (!book) return <BookUnavailable />;
 
   // The same book may already exist in our DB (if any reader has added it).
   // If so, surface its reader reviews below the catalog metadata.
@@ -129,5 +132,36 @@ export default async function ExternalBookPage({
         </section>
       </div>
     </article>
+  );
+}
+
+function BookUnavailable() {
+  return (
+    <div className="mx-auto max-w-lg py-16 text-center">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-ink-200 bg-ink-100/50">
+        <BookOpen className="h-6 w-6 text-accent/60" />
+      </div>
+      <h1 className="mt-6 font-serif text-2xl text-ink-900">We couldn&apos;t load that book.</h1>
+      <p className="mx-auto mt-3 max-w-md text-sm text-ink-900/65">
+        The catalog (OpenLibrary / Google Books) didn&apos;t respond in time. This is usually
+        temporary — try again in a moment, or browse for it from the library.
+      </p>
+      <div className="mt-8 flex flex-wrap justify-center gap-3">
+        <Link
+          href="/browse"
+          className="inline-flex items-center gap-2 rounded-md border border-ink-200 bg-ink-100/40 px-4 py-2 text-sm text-ink-900 transition hover:border-accent/50 hover:text-accent"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Back to browse
+        </Link>
+        <a
+          href=""
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm text-ink-50 shadow-glow transition hover:bg-accent-dark"
+        >
+          <RotateCw className="h-3.5 w-3.5" />
+          Try again
+        </a>
+      </div>
+    </div>
   );
 }
