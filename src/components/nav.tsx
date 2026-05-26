@@ -4,10 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
-import { ChevronDown, Menu, X, BookOpenText } from "lucide-react";
+import { ChevronDown, Menu, X, BookOpenText, User, Quote, Library, LogOut } from "lucide-react";
 import { CATEGORIES } from "@/lib/books";
 import { cn } from "@/lib/utils";
 import { CommandPalette } from "@/components/command-palette";
+import { authedFetch } from "@/lib/client";
 
 const links = [
   { href: "/dashboard", label: "Dashboard" },
@@ -210,6 +211,44 @@ function BrowseMenu({ active }: { active: boolean }) {
 
 function AuthButton() {
   const { ready, authenticated, login, logout, user } = usePrivy();
+  const [username, setUsername] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Pull the DB-stored username (Privy only knows email/oauth identity).
+  // Needed because the profile route is /u/[username], not /u/[privyDid].
+  useEffect(() => {
+    if (!authenticated) {
+      setUsername(null);
+      return;
+    }
+    let cancelled = false;
+    authedFetch<{ user: { username: string } }>("/api/me")
+      .then((d) => {
+        if (!cancelled) setUsername(d.user.username);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [authenticated]);
+
+  // Close on outside click / Escape.
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   if (!ready) {
     return <span className="px-2 text-ink-900/40">…</span>;
@@ -219,19 +258,74 @@ function AuthButton() {
     const email = user?.email?.address ?? user?.google?.email ?? "Signed in";
     const initial = (email[0] ?? "A").toUpperCase();
     return (
-      <div className="flex items-center gap-2">
-        <span
-          className="hidden h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-accent/40 to-wine/30 text-xs font-medium text-ink-950 ring-1 ring-accent/30 md:flex"
-          title={email}
-        >
-          {initial}
-        </span>
+      <div className="relative" ref={menuRef}>
         <button
-          onClick={logout}
-          className="hidden rounded-md border border-ink-200 px-3 py-1.5 text-sm text-ink-900/80 transition hover:border-accent/50 hover:text-ink-900 md:inline"
+          type="button"
+          aria-label="Account menu"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-1.5 rounded-full transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ink-50"
         >
-          Sign out
+          <span
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-accent/50 to-wine/40 text-sm font-medium text-ink-50 ring-1 ring-accent/40 transition hover:ring-accent/70"
+            title={email}
+          >
+            {initial}
+          </span>
+          <ChevronDown
+            className={cn("h-3 w-3 text-ink-900/50 transition-transform", open && "rotate-180")}
+          />
         </button>
+
+        {open && (
+          <div
+            role="menu"
+            className="absolute right-0 top-full mt-2 w-60 overflow-hidden rounded-xl border border-ink-200 bg-ink-100/95 shadow-glow-lg backdrop-blur-xl animate-slide-down"
+          >
+            <div className="border-b border-ink-200 px-4 py-3">
+              <p className="truncate font-serif text-sm text-ink-900">
+                {username ? `@${username}` : "Signed in"}
+              </p>
+              <p className="mt-0.5 truncate text-xs text-ink-900/55">{email}</p>
+            </div>
+            <nav className="p-1.5">
+              <MenuLink
+                href={username ? `/u/${username}` : "/dashboard"}
+                icon={User}
+                label="My profile"
+                hint="Followers & reviews"
+                onClick={() => setOpen(false)}
+                disabled={!username}
+              />
+              <MenuLink
+                href="/library"
+                icon={Library}
+                label="My library"
+                onClick={() => setOpen(false)}
+              />
+              <MenuLink
+                href="/quotes"
+                icon={Quote}
+                label="My quotes"
+                onClick={() => setOpen(false)}
+              />
+            </nav>
+            <div className="border-t border-ink-200 p-1.5">
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  logout();
+                }}
+                role="menuitem"
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-ink-900/80 transition hover:bg-ink-200/40 hover:text-ink-900"
+              >
+                <LogOut className="h-4 w-4 text-ink-900/50" />
+                Sign out
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -243,5 +337,46 @@ function AuthButton() {
     >
       Sign in
     </button>
+  );
+}
+
+function MenuLink({
+  href,
+  icon: Icon,
+  label,
+  hint,
+  onClick,
+  disabled,
+}: {
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  hint?: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  if (disabled) {
+    return (
+      <div
+        role="menuitem"
+        aria-disabled
+        className="flex w-full cursor-not-allowed items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-ink-900/30"
+      >
+        <Icon className="h-4 w-4" />
+        {label}
+      </div>
+    );
+  }
+  return (
+    <Link
+      role="menuitem"
+      href={href}
+      onClick={onClick}
+      className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-ink-900/80 transition hover:bg-ink-200/40 hover:text-ink-900"
+    >
+      <Icon className="h-4 w-4 text-ink-900/55" />
+      <span className="flex-1">{label}</span>
+      {hint && <span className="text-xs text-ink-900/40">{hint}</span>}
+    </Link>
   );
 }
