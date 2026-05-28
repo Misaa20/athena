@@ -3,11 +3,15 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Layers } from "lucide-react";
 import { BookCard } from "@/components/book-card";
 import { LoadMoreBooks } from "@/components/load-more-books";
+import { Shelf } from "@/components/shelf";
+import { AuthorsInGenreShelf } from "@/components/authors-in-genre-shelf";
 import {
   CATEGORIES,
   categoryDescription,
   categoryLabel,
+  getNewReleasesBySubject,
   getSubjectPage,
+  getTrendingBySubject,
   parentCategory,
 } from "@/lib/books";
 
@@ -35,7 +39,14 @@ export default async function GenrePage({ params }: { params: Promise<{ subject:
   const { subject } = await params;
   const label = categoryLabel(subject);
   const description = categoryDescription(subject);
-  const { books, total, ok } = await getSubjectPage(subject, PAGE_SIZE, 0);
+  // Fan out the genre's three discovery shelves alongside the main grid. They
+  // each fail soft (returning []), so a flaky catalog hides the shelf rather
+  // than breaking the page.
+  const [{ books, total, ok }, trending, newReleases] = await Promise.all([
+    getSubjectPage(subject, PAGE_SIZE, 0),
+    getTrendingBySubject(subject, 14),
+    getNewReleasesBySubject(subject, 14),
+  ]);
 
   // Only 404 when OpenLibrary answered and the subject genuinely has no works —
   // a failed lookup (ok:false) is a transient hiccup, not a missing genre.
@@ -147,25 +158,42 @@ export default async function GenrePage({ params }: { params: Promise<{ subject:
         </nav>
       </header>
 
-      {books.length > 0 ? (
-        <div className="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-          {books.map((b) => (
-            <BookCard
-              key={b.externalId}
-              externalId={b.externalId}
-              title={b.title}
-              authors={b.authors}
-              coverUrl={b.coverUrl}
-            />
-          ))}
-        </div>
-      ) : (
-        <p className="rounded-lg border border-ink-200 bg-ink-100 p-6 text-ink-900/60">
-          Couldn’t reach the catalog just now. Refresh in a moment to load {label.toLowerCase()} titles.
-        </p>
-      )}
+      <div className="space-y-12">
+        <Shelf
+          title={`Trending in ${label.toLowerCase()}`}
+          subtitle="What readers are picking up in this shelf right now."
+          books={trending}
+        />
+        <Shelf
+          title={`New in ${label.toLowerCase()}`}
+          subtitle="Recent titles people are already reading."
+          books={newReleases}
+        />
+        <AuthorsInGenreShelf subject={subject} label={label} />
+      </div>
 
-      <LoadMoreBooks subject={subject} initialOffset={PAGE_SIZE} initialHasMore={hasMore} />
+      <section className="space-y-4">
+        <h2 className="font-serif text-2xl text-ink-900">All {label.toLowerCase()}</h2>
+        {books.length > 0 ? (
+          <div className="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+            {books.map((b) => (
+              <BookCard
+                key={b.externalId}
+                externalId={b.externalId}
+                title={b.title}
+                authors={b.authors}
+                coverUrl={b.coverUrl}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-lg border border-ink-200 bg-ink-100 p-6 text-ink-900/60">
+            Couldn’t reach the catalog just now. Refresh in a moment to load {label.toLowerCase()} titles.
+          </p>
+        )}
+
+        <LoadMoreBooks subject={subject} initialOffset={PAGE_SIZE} initialHasMore={hasMore} />
+      </section>
     </div>
   );
 }

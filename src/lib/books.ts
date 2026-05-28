@@ -444,6 +444,85 @@ export async function getBooksBySubject(subject: string, limit = 12): Promise<Bo
   return books;
 }
 
+// "Trending in <genre>" — books in this subject sorted by current readlog
+// activity. The OL subjects endpoint accepts a sort param; readinglog is the
+// closest proxy to "what readers are picking up right now in this shelf".
+// Falls back to the plain subject feed if the sorted call fails, so callers
+// always get *something* rather than an empty row.
+export async function getTrendingBySubject(
+  subject: string,
+  limit = 14,
+): Promise<BookSearchResult[]> {
+  const url = `${OPEN_LIBRARY_SUBJECT}/${subject}.json?limit=${limit * 2}&sort=readinglog`;
+  try {
+    const res = await catalogFetch(url, 60 * 60 * 6);
+    if (!res.ok) throw new Error(`Trending subject error: ${res.status}`);
+    const data = (await res.json()) as { works?: OpenLibraryWork[] };
+    const books = (data.works ?? []).map(fromOpenLibraryWork).filter((b) => b.coverUrl);
+    if (books.length > 0) return books.slice(0, limit);
+  } catch (err) {
+    console.warn(`Trending in "${subject}" unavailable:`, (err as Error).message);
+  }
+  // Fallback: just the default subject feed so the shelf isn't empty.
+  const { books } = await getSubjectPage(subject, limit);
+  return books;
+}
+
+// "New in <genre>" — recent titles within this subject. OpenLibrary's search
+// supports a `subject:` clause plus a year range, sorted by readlog so the
+// shelf shows fresh titles people are actually reading (not obscure new
+// catalog entries with zero readers).
+export async function getNewReleasesBySubject(
+  subject: string,
+  limit = 14,
+): Promise<BookSearchResult[]> {
+  const year = new Date().getFullYear();
+  try {
+    const url = new URL(OPEN_LIBRARY);
+    url.searchParams.set(
+      "q",
+      `subject:${subject} AND first_publish_year:[${year - 2} TO ${year + 1}]`,
+    );
+    url.searchParams.set("sort", "readinglog");
+    url.searchParams.set("limit", String(limit * 3));
+    url.searchParams.set("fields", "key,title,subtitle,author_name,cover_i,first_publish_year,isbn");
+    const res = await catalogFetch(url, 60 * 60 * 12);
+    if (!res.ok) throw new Error(`New in subject error: ${res.status}`);
+    const data = (await res.json()) as { docs?: OpenLibraryDoc[] };
+    return (data.docs ?? [])
+      .map(fromOpenLibrary)
+      .filter((b) => b.coverUrl)
+      .slice(0, limit);
+  } catch (err) {
+    console.warn(`New in "${subject}" unavailable:`, (err as Error).message);
+    return [];
+  }
+}
+
+// Books in a subject by a specific author. Used by the "By authors you've read"
+// shelf — one search per author, capped tight so the per-genre dashboard
+// doesn't fan out into dozens of slow requests.
+export async function getBooksByAuthorInSubject(
+  author: string,
+  subject: string,
+  limit = 6,
+): Promise<BookSearchResult[]> {
+  if (!author.trim()) return [];
+  try {
+    const url = new URL(OPEN_LIBRARY);
+    url.searchParams.set("q", `author:"${author}" subject:${subject}`);
+    url.searchParams.set("sort", "readinglog");
+    url.searchParams.set("limit", String(limit));
+    url.searchParams.set("fields", "key,title,subtitle,author_name,cover_i,first_publish_year,isbn");
+    const res = await catalogFetch(url, 60 * 60 * 12);
+    if (!res.ok) return [];
+    const data = (await res.json()) as { docs?: OpenLibraryDoc[] };
+    return (data.docs ?? []).map(fromOpenLibrary).filter((b) => b.coverUrl);
+  } catch {
+    return [];
+  }
+}
+
 export type SubjectPage = {
   books: BookSearchResult[];
   /** OpenLibrary's total work_count for the subject. */
