@@ -84,10 +84,7 @@ export default async function HomePage() {
             Read deeply.
             <br />
             Remember{" "}
-            <span className="relative inline-block">
-              <span className="text-gradient-gold">everything.</span>
-              <span className="absolute -bottom-1 left-0 h-[3px] w-full bg-gradient-to-r from-accent/0 via-accent to-wine/0" />
-            </span>
+            <span className="text-gradient-gold">everything.</span>
           </h1>
           <p className="max-w-xl text-lg leading-relaxed text-ink-900/70">
             Athena is what Goodreads should have been — a quiet, candlelit place for readers, with an
