@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -29,10 +30,24 @@ const TAB_STATUS: Record<Exclude<Tab, "all">, Entry["status"]> = {
   want: "WANT_TO_READ",
 };
 
+// Wrap the content in Suspense: useSearchParams() requires a Suspense boundary
+// during static generation, or the build fails.
 export default function LibraryPage() {
+  return (
+    <Suspense fallback={<p className="text-ink-900/50">Loading…</p>}>
+      <LibraryContent />
+    </Suspense>
+  );
+}
+
+function LibraryContent() {
   const { ready, authenticated, login } = usePrivy();
+  const searchParams = useSearchParams();
+  // A search routed in from the command palette (⌘K) or a shared link arrives as
+  // ?q=… — seed the box from it and run the search on arrival.
+  const urlQuery = searchParams.get("q") ?? "";
   const [tab, setTab] = useState<Tab>("all");
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(urlQuery);
   const [results, setResults] = useState<BookSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -55,17 +70,30 @@ export default function LibraryPage() {
     if (authenticated) loadShelves();
   }, [authenticated, loadShelves]);
 
-  async function onSearch(e: React.FormEvent) {
-    e.preventDefault();
-    if (!query.trim()) return;
+  const runSearch = useCallback(async (q: string) => {
+    if (!q.trim()) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/books/search?q=${encodeURIComponent(query)}`);
+      const res = await fetch(`/api/books/search?q=${encodeURIComponent(q)}`);
       const data = (await res.json()) as { results: BookSearchResult[] };
       setResults(data.results ?? []);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  // Run the search when arriving with ?q= (command palette / shared link), and
+  // again whenever that param changes while the page is already mounted.
+  useEffect(() => {
+    if (urlQuery.trim()) {
+      setQuery(urlQuery);
+      runSearch(urlQuery);
+    }
+  }, [urlQuery, runSearch]);
+
+  function onSearch(e: React.FormEvent) {
+    e.preventDefault();
+    runSearch(query);
   }
 
   const visible = tab === "all" ? entries : entries.filter((e) => e.status === TAB_STATUS[tab]);
