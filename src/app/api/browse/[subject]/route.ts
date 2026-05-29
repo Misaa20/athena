@@ -12,13 +12,20 @@ export async function GET(req: Request, { params }: Ctx) {
   const offsetParam = Number(new URL(req.url).searchParams.get("offset"));
   const offset = Number.isFinite(offsetParam) && offsetParam > 0 ? Math.floor(offsetParam) : 0;
 
-  const { books, total, ok } = await getSubjectPage(subject, PAGE_SIZE, offset);
+  const { books, total, ok, nextOffset, hasMore } = await getSubjectPage(
+    subject,
+    PAGE_SIZE,
+    offset,
+  );
   return NextResponse.json({
     books,
     total,
     ok,
-    nextOffset: offset + PAGE_SIZE,
+    // getSubjectPage advances the offset by however many raw works it consumed
+    // to fill the page (it drops cover-less / non-English titles), so resuming
+    // from nextOffset never skips or repeats books.
+    nextOffset,
     // Keep the button available after a transient failure so the user can retry.
-    hasMore: ok ? offset + PAGE_SIZE < total : true,
+    hasMore: ok ? hasMore : true,
   });
 }

@@ -42,7 +42,7 @@ export default async function GenrePage({ params }: { params: Promise<{ subject:
   // Fan out the genre's three discovery shelves alongside the main grid. They
   // each fail soft (returning []), so a flaky catalog hides the shelf rather
   // than breaking the page.
-  const [{ books, total, ok }, trending, newReleases] = await Promise.all([
+  const [{ books, total, ok, nextOffset, hasMore }, trending, newReleases] = await Promise.all([
     getSubjectPage(subject, PAGE_SIZE, 0),
     getTrendingBySubject(subject, 14),
     getNewReleasesBySubject(subject, 14),
@@ -51,8 +51,6 @@ export default async function GenrePage({ params }: { params: Promise<{ subject:
   // Only 404 when OpenLibrary answered and the subject genuinely has no works —
   // a failed lookup (ok:false) is a transient hiccup, not a missing genre.
   if (ok && total === 0) notFound();
-
-  const hasMore = PAGE_SIZE < total;
   // If this slug is a sub-genre, pull its parent so we can render a breadcrumb
   // back to the parent + sibling sub-genre chips.
   const parent = parentCategory(subject);
@@ -192,7 +190,7 @@ export default async function GenrePage({ params }: { params: Promise<{ subject:
           </p>
         )}
 
-        <LoadMoreBooks subject={subject} initialOffset={PAGE_SIZE} initialHasMore={hasMore} />
+        <LoadMoreBooks subject={subject} initialOffset={nextOffset} initialHasMore={hasMore} />
       </section>
     </div>
   );

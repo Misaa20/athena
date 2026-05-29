@@ -549,7 +549,7 @@ export async function getBooksByAuthorInSubject(
 
 export type SubjectPage = {
   books: BookSearchResult[];
-  /** OpenLibrary's total work_count for the subject. */
+  /** OpenLibrary's total work_count for the subject (unfiltered). */
   total: number;
   /**
    * Whether the lookup actually reached OpenLibrary. `false` means the request
@@ -557,18 +557,26 @@ export type SubjectPage = {
    * should retry rather than treat the genre as nonexistent.
    */
   ok: boolean;
+  /**
+   * The raw OpenLibrary offset to resume from on the next page. Because we drop
+   * cover-less and non-English works, this advances by however many *raw* works
+   * we consumed to fill the page — not by `books.length` — so "Load more" never
+   * skips or repeats titles.
+   */
+  nextOffset: number;
+  /** Whether more raw works remain past `nextOffset`. */
+  hasMore: boolean;
 };
 
-// A paginated page of books for a genre, used by the /browse/[subject] page and
-// its "Load more" control. Books without covers are dropped for a cleaner grid,
-// so a page may hold fewer than `limit` items even when more remain. Retries a
-// couple of times because OpenLibrary readily rate-limits bursts (the /browse
-// page alone fires ~10 subject requests at once).
-export async function getSubjectPage(
+// One raw batch from the subjects endpoint, with the retry behaviour OpenLibrary
+// demands (it readily rate-limits bursts — the /browse page alone fires ~10
+// subject requests at once). Returns ok:false on exhausted retries so the caller
+// can distinguish a transient failure from a genuinely empty page.
+async function fetchSubjectBatch(
   subject: string,
-  limit = 24,
-  offset = 0,
-): Promise<SubjectPage> {
+  limit: number,
+  offset: number,
+): Promise<{ works: OpenLibraryWork[]; total: number; ok: boolean }> {
   const url = `${OPEN_LIBRARY_SUBJECT}/${subject}.json?limit=${limit}&offset=${offset}`;
   const delays = [300, 800];
   for (let attempt = 0; attempt <= delays.length; attempt++) {
@@ -576,20 +584,69 @@ export async function getSubjectPage(
       const res = await catalogFetch(url, 60 * 60 * 24);
       if (!res.ok) throw new Error(`Subject error: ${res.status}`);
       const data = (await res.json()) as { works?: OpenLibraryWork[]; work_count?: number };
-      const books = (data.works ?? [])
-        .map(fromOpenLibraryWork)
-        .filter((b) => b.coverUrl)
-        .filter(looksEnglish);
-      return { books, total: data.work_count ?? 0, ok: true };
+      return { works: data.works ?? [], total: data.work_count ?? 0, ok: true };
     } catch (err) {
       if (attempt === delays.length) {
         console.warn(`Subject "${subject}" unavailable:`, (err as Error).message);
-        return { books: [], total: 0, ok: false };
+        return { works: [], total: 0, ok: false };
       }
       await new Promise((r) => setTimeout(r, delays[attempt]));
     }
   }
-  return { books: [], total: 0, ok: false };
+  return { works: [], total: 0, ok: false };
+}
+
+// A paginated page of books for a genre, used by the /browse/[subject] page and
+// its "Load more" control. We drop cover-less and non-English works for a
+// cleaner, English-leaning grid — which can thin a raw 24-work page down to a
+// handful (romantic_comedy is mostly Japanese light novels on OpenLibrary). To
+// still return a full page, we over-fetch in a bounded loop until we've gathered
+// `limit` keepers (or run out of catalog / batches), and report the raw offset
+// we actually consumed so the next page resumes cleanly.
+export async function getSubjectPage(
+  subject: string,
+  limit = 24,
+  offset = 0,
+): Promise<SubjectPage> {
+  const collected: BookSearchResult[] = [];
+  const BATCH = limit * 2; // raw works per request — over-fetch to absorb filtering
+  const MAX_BATCHES = 4; // cap fan-out so a sparse genre can't loop forever
+  let rawOffset = offset;
+  let total = 0;
+  let reached = false;
+
+  for (let batch = 0; batch < MAX_BATCHES && collected.length < limit; batch++) {
+    const page = await fetchSubjectBatch(subject, BATCH, rawOffset);
+    if (!page.ok) {
+      // Transient failure. If we already have something, return it; otherwise
+      // signal ok:false so the caller can retry rather than 404 the genre.
+      if (collected.length === 0) {
+        return { books: [], total: 0, ok: false, nextOffset: rawOffset, hasMore: true };
+      }
+      break;
+    }
+    reached = true;
+    total = page.total;
+    if (page.works.length === 0) break; // exhausted the catalog
+
+    for (const w of page.works) {
+      rawOffset++;
+      const b = fromOpenLibraryWork(w);
+      if (b.coverUrl && looksEnglish(b)) collected.push(b);
+      if (collected.length >= limit) break;
+    }
+
+    if (rawOffset >= total) break; // no raw works left
+    if (page.works.length < BATCH) break; // short page → catalog exhausted
+  }
+
+  return {
+    books: collected.slice(0, limit),
+    total,
+    ok: reached,
+    nextOffset: rawOffset,
+    hasMore: reached ? rawOffset < total : true,
+  };
 }
 
 // OpenLibrary descriptions are wiki-style and frequently end with SEO spam
