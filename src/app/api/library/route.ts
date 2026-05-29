@@ -55,7 +55,17 @@ export async function POST(req: Request) {
       ...(status === "READING" ? { startedAt: new Date() } : {}),
       ...(status === "FINISHED" ? { finishedAt: new Date() } : {}),
     },
-    create: { userId: user.id, bookId: resolvedBookId, status, rating: rating ?? null },
+    create: {
+      userId: user.id,
+      bookId: resolvedBookId,
+      status,
+      rating: rating ?? null,
+      // Stamp timestamps on create too — otherwise shelving a book straight to
+      // FINISHED leaves finishedAt null and it never counts toward the reading
+      // goal (booksReadInYear filters on finishedAt).
+      ...(status === "READING" ? { startedAt: new Date() } : {}),
+      ...(status === "FINISHED" ? { finishedAt: new Date() } : {}),
+    },
   });
   return NextResponse.json({ entry });
 }

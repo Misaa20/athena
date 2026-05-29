@@ -19,8 +19,13 @@ export async function GET(req: Request) {
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const yearParam = new URL(req.url).searchParams.get("year");
-  const year = yearParam ? Number(yearParam) : new Date().getFullYear();
+  // Validate the year rather than trusting the query string: Number("abc") is
+  // NaN, which would poison the date-range query and the userId_year lookup.
+  const yearParam = Number(new URL(req.url).searchParams.get("year"));
+  const year =
+    Number.isInteger(yearParam) && yearParam >= 2000 && yearParam <= 2100
+      ? yearParam
+      : new Date().getFullYear();
 
   const [goal, read] = await Promise.all([
     db.readingGoal.findUnique({ where: { userId_year: { userId: user.id, year } } }),

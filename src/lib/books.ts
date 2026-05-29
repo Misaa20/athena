@@ -412,7 +412,9 @@ function fromOpenLibraryWork(w: OpenLibraryWork): BookSearchResult {
 // homepage degrades gracefully (the shelf simply doesn't render).
 export async function getTrendingBooks(limit = 14): Promise<BookSearchResult[]> {
   try {
-    const res = await catalogFetch(`${OPEN_LIBRARY_TRENDING}?limit=${limit * 2}`, 60 * 60 * 6);
+    // Over-fetch generously: many trending works lack a cover_i and get dropped
+    // below, so requesting only limit*2 can leave the shelf visibly thin.
+    const res = await catalogFetch(`${OPEN_LIBRARY_TRENDING}?limit=${limit * 4}`, 60 * 60 * 6);
     if (!res.ok) throw new Error(`Trending error: ${res.status}`);
     const data = (await res.json()) as { works?: OpenLibraryWork[] };
     return (data.works ?? [])
@@ -921,7 +923,10 @@ function toBook(v: GoogleVolume): BookSearchResult {
     subtitle: info.subtitle,
     authors: info.authors ?? [],
     description: cleanDescription(info.description),
-    coverUrl: info.imageLinks?.thumbnail?.replace("http://", "https://"),
+    coverUrl: (info.imageLinks?.thumbnail ?? info.imageLinks?.smallThumbnail)?.replace(
+      "http://",
+      "https://",
+    ),
     pageCount: info.pageCount,
     publishedYear: Number.isFinite(year) ? year : undefined,
     isbn13,

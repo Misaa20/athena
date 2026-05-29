@@ -13,6 +13,7 @@ export function GoalCard() {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     authedFetch<Goal>("/api/me/goal")
@@ -27,6 +28,7 @@ export function GoalCard() {
     const target = Number(draft);
     if (!target || target < 1) return;
     setSaving(true);
+    setError(false);
     try {
       const g = await authedFetch<Goal>("/api/me/goal", {
         method: "PUT",
@@ -34,6 +36,8 @@ export function GoalCard() {
       });
       setGoal(g);
       setEditing(false);
+    } catch {
+      setError(true);
     } finally {
       setSaving(false);
     }
@@ -77,6 +81,7 @@ export function GoalCard() {
                 >
                   {saving ? "…" : "Save"}
                 </button>
+                {error && <span className="text-xs text-wine">Couldn’t save — try again.</span>}
               </div>
             ) : (
               <button
@@ -107,6 +112,7 @@ export function GoalCard() {
             >
               {saving ? "…" : "Set goal"}
             </button>
+            {error && <span className="text-xs text-wine">Couldn’t save — try again.</span>}
           </div>
         </div>
       )}

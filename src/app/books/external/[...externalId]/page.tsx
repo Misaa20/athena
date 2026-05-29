@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { BookOpen, ArrowLeft, RotateCw } from "lucide-react";
+import { BookOpen, ArrowLeft } from "lucide-react";
 import { getBookByExternalId } from "@/lib/books";
 import { db } from "@/lib/db";
 import { StarRating } from "@/components/star-rating";
 import { BookActions } from "@/components/book-actions";
 import { BookCover } from "@/components/book-cover";
+import { RetryButton } from "@/components/retry-button";
 
 // Detail page for a book that lives in an external catalog (Google Books /
 // OpenLibrary) but not yet in our database — i.e. anything reached from search
@@ -154,13 +155,7 @@ function BookUnavailable() {
           <ArrowLeft className="h-3.5 w-3.5" />
           Back to browse
         </Link>
-        <a
-          href=""
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm text-ink-50 shadow-glow transition hover:bg-accent-dark"
-        >
-          <RotateCw className="h-3.5 w-3.5" />
-          Try again
-        </a>
+        <RetryButton />
       </div>
     </div>
   );

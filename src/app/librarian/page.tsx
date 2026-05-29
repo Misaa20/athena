@@ -21,11 +21,13 @@ export default function LibrarianPage() {
   const [usedLibrary, setUsedLibrary] = useState(0);
   const [asked, setAsked] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
 
   async function ask(value?: string) {
     const q = (value ?? prompt).trim();
     if (!q) return;
     setLoading(true);
+    setError(false);
     setRecs([]);
     try {
       // authedFetch attaches the Privy token when signed in, so the server can
@@ -37,6 +39,10 @@ export default function LibrarianPage() {
       setRecs(data.recommendations ?? []);
       setUsedLibrary(data.usedLibrary ?? 0);
       setAsked(true);
+    } catch {
+      // Network error / rate limit — tell the user instead of silently resetting.
+      setError(true);
+      setAsked(false);
     } finally {
       setLoading(false);
     }
@@ -76,6 +82,12 @@ export default function LibrarianPage() {
           ))}
         </div>
       </div>
+
+      {error && (
+        <p className="text-sm text-wine">
+          The librarian couldn’t answer just now — please try again in a moment.
+        </p>
+      )}
 
       {asked && (
         <p className="text-sm text-ink-900/50">

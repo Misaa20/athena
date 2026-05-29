@@ -79,12 +79,26 @@ export async function getCurrentUser(req: Request): Promise<User | null> {
     return db.user.update({ where: { id: byEmail.id }, data: { privyId } });
   }
 
-  return db.user.create({
-    data: {
-      privyId,
-      email: resolvedEmail,
-      username: await uniqueUsername(resolvedEmail),
-      displayName,
-    },
-  });
+  try {
+    return await db.user.create({
+      data: {
+        privyId,
+        email: resolvedEmail,
+        username: await uniqueUsername(resolvedEmail),
+        displayName,
+      },
+    });
+  } catch (err) {
+    // The client fires several authed requests in parallel on first load; two of
+    // them can both pass the findUnique above and race into create, so the loser
+    // hits the unique constraint on privyId/email (Prisma P2002). Recover by
+    // returning the row that won the race instead of surfacing a 500.
+    if (err && typeof err === "object" && (err as { code?: string }).code === "P2002") {
+      const won =
+        (await db.user.findUnique({ where: { privyId } })) ??
+        (await db.user.findUnique({ where: { email: resolvedEmail } }));
+      if (won) return won;
+    }
+    throw err;
+  }
 }
