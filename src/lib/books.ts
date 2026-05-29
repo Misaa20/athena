@@ -383,6 +383,18 @@ type OpenLibraryWork = {
   cover_id?: number;
 };
 
+// OpenLibrary's subject feeds are a single global catalog and are frequently
+// dominated by non-English editions — "romantic_comedy", for instance, is
+// flooded with Japanese light novels. Athena leans toward English-reading
+// users, so we drop works whose title is written in a CJK script (Han /
+// Hiragana / Katakana / Hangul). Search-based shelves additionally pass
+// `language:eng`; this filter is the backstop for the subjects endpoint, which
+// has no language parameter.
+const CJK_SCRIPT = /\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana}|\p{Script=Hangul}/u;
+function looksEnglish(b: BookSearchResult): boolean {
+  return !CJK_SCRIPT.test(b.title);
+}
+
 function fromOpenLibraryWork(w: OpenLibraryWork): BookSearchResult {
   const coverId = w.cover_id ?? w.cover_i;
   const authors =
@@ -445,25 +457,36 @@ export async function getBooksBySubject(subject: string, limit = 12): Promise<Bo
 }
 
 // "Trending in <genre>" — books in this subject sorted by current readlog
-// activity. The OL subjects endpoint accepts a sort param; readinglog is the
-// closest proxy to "what readers are picking up right now in this shelf".
-// Falls back to the plain subject feed if the sorted call fails, so callers
-// always get *something* rather than an empty row.
+// activity. We use the search endpoint (not /subjects/<x>.json?sort=...) because
+// the subjects endpoint's sort param is unreliable — it returns an empty `works`
+// array for some subjects (e.g. fantasy), which silently hid the whole shelf.
+// search.json reliably honours `sort=readinglog` and lets us pin `language:eng`
+// so the row leans toward English-reading users. Falls back to the plain subject
+// feed (itself English-filtered) if the search call fails, so callers always get
+// *something* rather than an empty row.
 export async function getTrendingBySubject(
   subject: string,
   limit = 14,
 ): Promise<BookSearchResult[]> {
-  const url = `${OPEN_LIBRARY_SUBJECT}/${subject}.json?limit=${limit * 2}&sort=readinglog`;
   try {
+    const url = new URL(OPEN_LIBRARY);
+    url.searchParams.set("q", `subject:${subject} AND language:eng`);
+    url.searchParams.set("sort", "readinglog");
+    url.searchParams.set("limit", String(limit * 2));
+    url.searchParams.set("fields", "key,title,subtitle,author_name,cover_i,first_publish_year,isbn");
     const res = await catalogFetch(url, 60 * 60 * 6);
     if (!res.ok) throw new Error(`Trending subject error: ${res.status}`);
-    const data = (await res.json()) as { works?: OpenLibraryWork[] };
-    const books = (data.works ?? []).map(fromOpenLibraryWork).filter((b) => b.coverUrl);
+    const data = (await res.json()) as { docs?: OpenLibraryDoc[] };
+    const books = (data.docs ?? [])
+      .map(fromOpenLibrary)
+      .filter((b) => b.coverUrl)
+      .filter(looksEnglish);
     if (books.length > 0) return books.slice(0, limit);
   } catch (err) {
     console.warn(`Trending in "${subject}" unavailable:`, (err as Error).message);
   }
-  // Fallback: just the default subject feed so the shelf isn't empty.
+  // Fallback: the default subject feed (already English-filtered) so the shelf
+  // isn't empty when search is unreachable.
   const { books } = await getSubjectPage(subject, limit);
   return books;
 }
@@ -481,7 +504,7 @@ export async function getNewReleasesBySubject(
     const url = new URL(OPEN_LIBRARY);
     url.searchParams.set(
       "q",
-      `subject:${subject} AND first_publish_year:[${year - 2} TO ${year + 1}]`,
+      `subject:${subject} AND language:eng AND first_publish_year:[${year - 2} TO ${year + 1}]`,
     );
     url.searchParams.set("sort", "readinglog");
     url.searchParams.set("limit", String(limit * 3));
@@ -492,6 +515,7 @@ export async function getNewReleasesBySubject(
     return (data.docs ?? [])
       .map(fromOpenLibrary)
       .filter((b) => b.coverUrl)
+      .filter(looksEnglish)
       .slice(0, limit);
   } catch (err) {
     console.warn(`New in "${subject}" unavailable:`, (err as Error).message);
@@ -552,7 +576,10 @@ export async function getSubjectPage(
       const res = await catalogFetch(url, 60 * 60 * 24);
       if (!res.ok) throw new Error(`Subject error: ${res.status}`);
       const data = (await res.json()) as { works?: OpenLibraryWork[]; work_count?: number };
-      const books = (data.works ?? []).map(fromOpenLibraryWork).filter((b) => b.coverUrl);
+      const books = (data.works ?? [])
+        .map(fromOpenLibraryWork)
+        .filter((b) => b.coverUrl)
+        .filter(looksEnglish);
       return { books, total: data.work_count ?? 0, ok: true };
     } catch (err) {
       if (attempt === delays.length) {
