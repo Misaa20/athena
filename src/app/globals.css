@@ -9,6 +9,7 @@
 html, body {
   background-color: #17120b;
   color: #ece0cc;
+  overflow-x: hidden;
 }
 
 body {

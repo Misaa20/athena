@@ -69,10 +69,10 @@ export default async function HomePage() {
     <div className="space-y-28">
       {/* Hero ------------------------------------------------------------- */}
       <section className="relative grid items-center gap-10 pt-6 md:grid-cols-[1.1fr_0.9fr]">
-        {/* Aurora wash behind hero */}
-        <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-          <div className="aurora absolute -left-32 -top-20 h-[28rem] w-[28rem] rounded-full bg-accent/20 blur-3xl" />
-          <div className="aurora absolute right-0 top-40 h-[22rem] w-[22rem] rounded-full bg-wine/20 blur-3xl" />
+        {/* Aurora wash behind hero — not clipped, so the blur stays soft (no hard square edges) */}
+        <div className="pointer-events-none absolute inset-0 -z-10">
+          <div className="aurora absolute -left-20 -top-10 h-[28rem] w-[28rem] rounded-full bg-accent/15 blur-[120px]" />
+          <div className="aurora absolute right-0 top-40 h-[22rem] w-[22rem] rounded-full bg-wine/15 blur-[120px]" />
         </div>
 
         <div className="animate-fade-up space-y-7">
