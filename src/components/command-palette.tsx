@@ -37,8 +37,14 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
+  const [shortcutLabel, setShortcutLabel] = useState("Ctrl K");
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const isMac = /Mac|iPhone|iPad|iPod/.test(window.navigator.platform);
+    setShortcutLabel(isMac ? "Cmd K" : "Ctrl K");
+  }, []);
 
   // Global Cmd/Ctrl+K to toggle.
   useEffect(() => {
@@ -126,10 +132,13 @@ export function CommandPalette() {
       >
         <Search className="h-3.5 w-3.5" />
         <span>Search</span>
-        <span className="ml-2 flex items-center gap-1 rounded border border-ink-200 bg-ink-50 px-1.5 py-0.5 font-mono text-[10px] text-ink-900/50">
+        <span className="hidden">
           <kbd>⌘</kbd>
           <kbd>K</kbd>
         </span>
+        <kbd className="ml-2 rounded border border-ink-200 bg-ink-50 px-1.5 py-0.5 font-mono text-[10px] text-ink-900/50">
+          {shortcutLabel}
+        </kbd>
       </button>
 
       {open && (

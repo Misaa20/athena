@@ -14,6 +14,27 @@ const examples = [
   "Nonfiction about memory that reads like a novel",
 ];
 
+const sampleRecommendations = [
+  {
+    title: "Stoner",
+    author: "John Williams",
+    reason:
+      "A spare, deeply interior campus novel for readers who want quiet emotional force without melodrama.",
+  },
+  {
+    title: "The Uncommon Reader",
+    author: "Alan Bennett",
+    reason:
+      "Short, dry, and humane. A good fit when you want literary wit without losing tenderness.",
+  },
+  {
+    title: "A Month in the Country",
+    author: "J.L. Carr",
+    reason:
+      "Under 200 pages, reflective, and beautifully restrained, with grief and restoration held in balance.",
+  },
+];
+
 export default function LibrarianPage() {
   const { authenticated } = usePrivy();
   const [prompt, setPrompt] = useState("");
@@ -97,6 +118,26 @@ export default function LibrarianPage() {
               ? "Add books to your library to get recommendations based on what you’ve read."
               : "Sign in and build your library to get recommendations based on your reading."}
         </p>
+      )}
+
+      {!asked && recs.length === 0 && !loading && !error && (
+        <section className="space-y-4 rounded-xl border border-ink-200 bg-ink-100/35 p-5">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-accent">Example answer</p>
+            <h2 className="mt-2 font-serif text-2xl text-ink-900">
+              For "a quiet, philosophical novel under 300 pages"
+            </h2>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {sampleRecommendations.map((r) => (
+              <Card key={r.title}>
+                <CardTitle>{r.title}</CardTitle>
+                <CardDescription className="mt-1 text-ink-900/60">{r.author}</CardDescription>
+                <p className="mt-3 text-sm leading-relaxed text-ink-900/80">{r.reason}</p>
+              </Card>
+            ))}
+          </div>
+        </section>
       )}
 
       {recs.length > 0 && (

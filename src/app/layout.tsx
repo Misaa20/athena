@@ -7,9 +7,27 @@ import { ToastProvider } from "@/components/toast";
 import { ScrollToTop } from "@/components/scroll-to-top";
 
 export const metadata: Metadata = {
-  title: "Athena — Your AI reading companion",
+  metadataBase: new URL("https://athena-wheat-zeta.vercel.app"),
+  title: {
+    default: "Athena - Your AI Reading Companion",
+    template: "%s - Athena",
+  },
   description:
     "Track, understand, remember, and discover books. Athena is an AI-powered reading companion for thoughtful readers.",
+  openGraph: {
+    title: "Athena - Your AI Reading Companion",
+    description:
+      "Track your books, save quotes, and ask an AI librarian for recommendations grounded in your taste.",
+    url: "/",
+    siteName: "Athena",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Athena - Your AI Reading Companion",
+    description:
+      "Track your books, save quotes, and ask an AI librarian for recommendations grounded in your taste.",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -26,20 +44,39 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="noise min-h-screen text-ink-900 antialiased">
         <Providers>
           <ToastProvider>
+            <a href="#main" className="skip-link">
+              Skip to content
+            </a>
             <Nav />
-            <main className="relative z-[2] mx-auto max-w-6xl px-6 py-12">{children}</main>
+            <main id="main" className="relative z-[2] mx-auto max-w-6xl px-6 py-12">
+              {children}
+            </main>
             <ScrollToTop />
             <footer className="relative z-[2] mt-24 border-t border-ink-200/60">
               <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-6 py-12 text-center text-sm text-ink-900/50">
                 <p className="font-serif text-2xl text-gradient-gold">Athena</p>
                 <p className="max-w-xl">
-                  A quiet, beautiful place for readers — with an AI librarian who actually pays attention.
+                  A quiet, beautiful place for readers - with an AI librarian who actually pays attention.
                 </p>
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-5">
-                  <Link href="/browse" className="transition hover:text-accent">Browse</Link>
-                  <Link href="/people" className="transition hover:text-accent">Readers</Link>
-                  <Link href="/librarian" className="transition hover:text-accent">Librarian</Link>
-                  <Link href="/quotes" className="transition hover:text-accent">Quotes</Link>
+                  <Link href="/browse" className="transition hover:text-accent">
+                    Browse
+                  </Link>
+                  <Link href="/people" className="transition hover:text-accent">
+                    Readers
+                  </Link>
+                  <Link href="/librarian" className="transition hover:text-accent">
+                    Librarian
+                  </Link>
+                  <Link href="/quotes" className="transition hover:text-accent">
+                    Quotes
+                  </Link>
+                  <Link href="/privacy" className="transition hover:text-accent">
+                    Privacy
+                  </Link>
+                  <Link href="/terms" className="transition hover:text-accent">
+                    Terms
+                  </Link>
                 </div>
                 <p className="mt-4 text-xs text-ink-900/30">
                   © {new Date().getFullYear()} Athena · Built for thoughtful readers

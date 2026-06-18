@@ -31,10 +31,32 @@ const features = [
 ];
 
 const stats = [
-  { value: "10M+", label: "Books indexed" },
-  { value: "AI", label: "Personalized picks" },
-  { value: "∞", label: "Quotes saved" },
+  { value: "Free", label: "During beta" },
+  { value: "Private", label: "Reading notes" },
+  { value: "AI", label: "Librarian built in" },
   { value: "16", label: "Genre shelves" },
+];
+
+const faqs = [
+  {
+    question: "Is Athena free?",
+    answer:
+      "Athena is free during beta. If paid plans arrive later, the free reading library will stay clear before you sign up.",
+  },
+  {
+    question: "Can I import from Goodreads?",
+    answer: "Goodreads import is planned. For now, search any book and add it to your shelves manually.",
+  },
+  {
+    question: "Is my reading data private?",
+    answer:
+      "Your personal shelves, notes, and quotes belong to you. Public profile features only show what you choose to share.",
+  },
+  {
+    question: "How does the AI librarian work?",
+    answer:
+      "It takes a plain-English prompt and returns recommendations with reasons. Signed-in readers can ground recommendations in their library.",
+  },
 ];
 
 const steps = [
@@ -92,18 +114,18 @@ export default async function HomePage() {
           </p>
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <Link
-              href="/signup"
+              href="/librarian"
               className="group inline-flex h-12 items-center gap-2 rounded-md bg-accent px-6 font-medium text-ink-50 shadow-glow transition hover:-translate-y-0.5 hover:bg-accent-dark hover:shadow-glow-lg"
             >
-              Start your library
+              Try the librarian
               <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
             </Link>
             <Link
-              href="/librarian"
+              href="/signup"
               className="group inline-flex h-12 items-center gap-2 rounded-md border border-ink-200 bg-ink-100/30 px-6 text-ink-900 backdrop-blur-sm transition hover:border-accent/50 hover:bg-ink-100"
             >
               <Sparkles className="h-4 w-4 text-accent" />
-              Try the librarian
+              Start your library
             </Link>
           </div>
           <div className="flex items-center gap-2 pt-3 text-xs text-ink-900/40">
@@ -279,6 +301,50 @@ export default async function HomePage() {
             </Card>
           );
         })}
+      </section>
+
+      <section className="grid gap-8 md:grid-cols-[0.85fr_1.15fr] md:items-start">
+        <div>
+          <p className="text-xs uppercase tracking-[0.25em] text-accent">Why Athena</p>
+          <h2 className="mt-2 font-serif text-3xl text-ink-900 md:text-4xl">
+            Built for readers who outgrew noisy book apps.
+          </h2>
+          <p className="mt-4 text-ink-900/65">
+            Athena is for people who want a calmer place to track what they read, keep the lines that
+            mattered, and get recommendations that feel considered instead of random.
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="rounded-xl border border-ink-200 bg-ink-100/40 p-5">
+            <p className="text-xs uppercase tracking-[0.2em] text-accent">Pricing</p>
+            <h3 className="mt-2 font-serif text-2xl text-ink-900">Free during beta</h3>
+            <p className="mt-2 text-sm leading-relaxed text-ink-900/65">
+              Start a library, save quotes, and try the librarian without guessing what it costs.
+            </p>
+          </div>
+          <div className="rounded-xl border border-ink-200 bg-ink-100/40 p-5">
+            <p className="text-xs uppercase tracking-[0.2em] text-accent">Privacy</p>
+            <h3 className="mt-2 font-serif text-2xl text-ink-900">Your notes stay yours</h3>
+            <p className="mt-2 text-sm leading-relaxed text-ink-900/65">
+              Shelves, notes, and quotes are personal by default. Share your reading life when you choose.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-8">
+        <div>
+          <p className="text-xs uppercase tracking-[0.25em] text-accent">FAQ</p>
+          <h2 className="mt-2 font-serif text-3xl text-ink-900">Before you start a shelf.</h2>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          {faqs.map((faq) => (
+            <div key={faq.question} className="rounded-xl border border-ink-200 bg-ink-100/35 p-5">
+              <h3 className="font-serif text-lg text-ink-900">{faq.question}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-ink-900/65">{faq.answer}</p>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* CTA ------------------------------------------------------------- */}
