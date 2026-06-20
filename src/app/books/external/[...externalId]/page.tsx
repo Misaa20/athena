@@ -31,7 +31,7 @@ export default async function ExternalBookPage({
   const dbBook = await db.book.findUnique({
     where: { externalId: id },
     include: {
-      reviews: { take: 10, orderBy: { createdAt: "desc" }, include: { user: true } },
+      reviews: { where: { isPublic: true }, take: 10, orderBy: { createdAt: "desc" }, include: { user: true } },
     },
   });
   const reviews = dbBook?.reviews ?? [];

@@ -3,7 +3,7 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Terms",
-  description: "Basic terms for using Athena.",
+  description: "Basic terms for using Athena during beta.",
 };
 
 export default function TermsPage() {
@@ -13,7 +13,8 @@ export default function TermsPage() {
         <p className="text-xs uppercase tracking-[0.25em] text-accent">Terms</p>
         <h1 className="mt-2 font-serif text-4xl text-ink-900">Use Athena thoughtfully.</h1>
         <p className="mt-3 text-ink-900/65">
-          These basic terms explain the expected use of Athena while the product is in active development.
+          These basic terms explain expected use of Athena while the product is in beta and active
+          development.
         </p>
       </header>
 
@@ -21,7 +22,8 @@ export default function TermsPage() {
         <h2 className="font-serif text-2xl text-ink-900">Your content</h2>
         <p className="text-ink-900/65">
           You are responsible for the reviews, notes, quotes, profile details, and other content you add.
-          Keep public contributions respectful and lawful.
+          Keep public contributions respectful, lawful, and free of harassment, spam, and infringing
+          material.
         </p>
       </section>
 
@@ -29,7 +31,15 @@ export default function TermsPage() {
         <h2 className="font-serif text-2xl text-ink-900">Recommendations</h2>
         <p className="text-ink-900/65">
           AI recommendations are suggestions, not guarantees. Book metadata may come from third-party
-          catalogs and can occasionally be incomplete or incorrect.
+          catalogs and can occasionally be incomplete, outdated, duplicated, or incorrect.
+        </p>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-serif text-2xl text-ink-900">Beta testing</h2>
+        <p className="text-ink-900/65">
+          If you are testing Athena, you agree to report problems in good faith and avoid intentionally
+          abusing rate limits, auth flows, catalog APIs, AI endpoints, or other users&apos; accounts.
         </p>
       </section>
 
@@ -38,6 +48,14 @@ export default function TermsPage() {
         <p className="text-ink-900/65">
           Athena may change while features are being built. We will try to preserve your data, but beta
           features can move, change, or temporarily go offline.
+        </p>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-serif text-2xl text-ink-900">Account access</h2>
+        <p className="text-ink-900/65">
+          You are responsible for the account you use to sign in. If you lose access to that sign-in
+          method, Athena may not be able to verify ownership of your account.
         </p>
       </section>
 

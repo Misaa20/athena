@@ -71,6 +71,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <Link href="/quotes" className="transition hover:text-accent">
                     Quotes
                   </Link>
+                  <Link href="/feedback" className="transition hover:text-accent">
+                    Feedback
+                  </Link>
                   <Link href="/privacy" className="transition hover:text-accent">
                     Privacy
                   </Link>

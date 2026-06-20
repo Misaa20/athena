@@ -50,6 +50,7 @@ function LibraryContent() {
   const [query, setQuery] = useState(urlQuery);
   const [results, setResults] = useState<BookSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState(false);
 
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loadingShelves, setLoadingShelves] = useState(false);
@@ -73,10 +74,15 @@ function LibraryContent() {
   const runSearch = useCallback(async (q: string) => {
     if (!q.trim()) return;
     setLoading(true);
+    setSearchError(false);
     try {
       const res = await fetch(`/api/books/search?q=${encodeURIComponent(q)}`);
+      if (!res.ok) throw new Error("search_failed");
       const data = (await res.json()) as { results: BookSearchResult[] };
       setResults(data.results ?? []);
+    } catch {
+      setResults([]);
+      setSearchError(true);
     } finally {
       setLoading(false);
     }
@@ -115,6 +121,12 @@ function LibraryContent() {
           {loading ? "Searching…" : "Search"}
         </Button>
       </form>
+
+      {searchError && (
+        <p className="rounded-md border border-wine/20 bg-wine/5 px-4 py-3 text-sm text-wine">
+          Book search is unavailable right now. Please try again in a moment.
+        </p>
+      )}
 
       {results.length > 0 && (
         <section>

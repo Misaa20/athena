@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BookHeart, Sparkles, BookMarked, Users, Quote, Compass, Library, ArrowRight } from "lucide-react";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Shelf } from "@/components/shelf";
-import { CATEGORIES, getBooksBySubject, getNewReleases, getTrendingBooks } from "@/lib/books";
+import { FEATURED_CATEGORIES, getBooksBySubject, getNewReleases, getTrendingBooks } from "@/lib/books";
 
 // Re-fetch the shelves at most once an hour.
 export const revalidate = 3600;
@@ -81,7 +81,7 @@ export default async function HomePage() {
   const [trending, newReleases, ...categoryBooks] = await Promise.all([
     getTrendingBooks(14),
     getNewReleases(14),
-    ...CATEGORIES.map((c) => getBooksBySubject(c.subject, 12)),
+    ...FEATURED_CATEGORIES.map((c) => getBooksBySubject(c.subject, 12)),
   ]);
 
   const collage = trending.filter((b) => b.coverUrl).slice(0, 5);
@@ -246,7 +246,7 @@ export default async function HomePage() {
             All genres <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
-        {CATEGORIES.map((c, i) => (
+        {FEATURED_CATEGORIES.map((c, i) => (
           <Shelf key={c.subject} title={c.label} books={categoryBooks[i]} />
         ))}
       </section>

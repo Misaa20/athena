@@ -297,10 +297,10 @@ async function main() {
 
   // Shelves, reviews, quotes, goals per reader.
   for (const user of users) {
-    const shelf = sample(books, 6 + rand(7)); // 6–12 books each
+    const libraryBooks = sample(books, 6 + rand(7)); // 6-12 books each
     const finishedThisYear: string[] = [];
 
-    for (const book of shelf) {
+    for (const book of libraryBooks) {
       const roll = Math.random();
       const status: ReadingStatus =
         roll < 0.5 ? "FINISHED" : roll < 0.7 ? "READING" : roll < 0.95 ? "WANT_TO_READ" : "DNF";
@@ -332,6 +332,7 @@ async function main() {
             bookId: book.id,
             rating,
             body: pick(REVIEW_BODIES),
+            isPublic: chance(0.9),
             createdAt: finishedAt ?? daysAgo(rand(120)),
           },
         });
@@ -346,7 +347,23 @@ async function main() {
             bookId: book.id,
             body: pick(QUOTE_BODIES),
             page: chance(0.6) ? rand(300) + 10 : null,
+            isPublic: chance(0.85),
           },
+        });
+      }
+    }
+
+    const customShelves = [
+      { name: "Start here", isPublic: true, books: sample(libraryBooks, Math.min(4, libraryBooks.length)) },
+      { name: "Private notes", isPublic: false, books: sample(libraryBooks, Math.min(3, libraryBooks.length)) },
+    ];
+    for (const customShelf of customShelves) {
+      const createdShelf = await db.shelf.create({
+        data: { userId: user.id, name: customShelf.name, isPublic: customShelf.isPublic },
+      });
+      for (const book of customShelf.books) {
+        await db.shelfEntry.create({
+          data: { shelfId: createdShelf.id, bookId: book.id },
         });
       }
     }

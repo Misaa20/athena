@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { rateLimit } from "@/lib/rate-limit";
 
 // Count books the user finished within a calendar year.
 async function booksReadInYear(userId: string, year: number) {
@@ -42,6 +43,9 @@ const Body = z.object({
 
 // PUT /api/me/goal { target, year? } — set/update the annual goal.
 export async function PUT(req: Request) {
+  const limited = rateLimit(req, { name: "goal:write", limit: 30, windowMs: 60_000 });
+  if (limited) return limited;
+
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

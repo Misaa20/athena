@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { rateLimit } from "@/lib/rate-limit";
 
 const CreateBody = z.object({
   name: z.string().trim().min(1).max(60),
@@ -31,6 +32,9 @@ export async function GET(req: Request) {
 
 // POST /api/me/shelves { name, isPublic? } — create a new shelf.
 export async function POST(req: Request) {
+  const limited = rateLimit(req, { name: "shelves:write", limit: 30, windowMs: 60_000 });
+  if (limited) return limited;
+
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

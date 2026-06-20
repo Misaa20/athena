@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { BookPayload, resolveBookId } from "@/lib/book-store";
+import { rateLimit } from "@/lib/rate-limit";
 
 const Body = z
   .object({
@@ -16,6 +17,9 @@ const Body = z
 // Favoriting a book that isn't on a shelf yet creates a WANT_TO_READ entry so
 // the favorite has somewhere to attach (favorites live on ReadingEntry).
 export async function POST(req: Request) {
+  const limited = rateLimit(req, { name: "favorites:write", limit: 60, windowMs: 60_000 });
+  if (limited) return limited;
+
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { BookPayload, resolveBookId } from "@/lib/book-store";
+import { rateLimit } from "@/lib/rate-limit";
 
 const STATUSES = ["WANT_TO_READ", "READING", "FINISHED", "DNF"] as const;
 
@@ -35,6 +36,9 @@ export async function GET(req: Request) {
 // POST /api/library — add/update a shelf entry for the current user. Accepts a
 // known bookId or a catalog payload (upserted on the fly).
 export async function POST(req: Request) {
+  const limited = rateLimit(req, { name: "library:write", limit: 60, windowMs: 60_000 });
+  if (limited) return limited;
+
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
@@ -72,6 +76,9 @@ export async function POST(req: Request) {
 
 // DELETE /api/library?bookId=... — remove a book from the current user's shelves.
 export async function DELETE(req: Request) {
+  const limited = rateLimit(req, { name: "library:write", limit: 60, windowMs: 60_000 });
+  if (limited) return limited;
+
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

@@ -59,11 +59,7 @@ cp .env.example .env
 # fill in DATABASE_URL and (optionally) OPENAI_API_KEY
 
 # 3. database
-npx prisma db push          # creates tables
-# then enable pgvector once, in psql or your DB UI:
-#   CREATE EXTENSION IF NOT EXISTS vector;
-#   ALTER TABLE "Book" ADD COLUMN IF NOT EXISTS embedding vector(1536);
-#   CREATE INDEX IF NOT EXISTS book_embedding_idx ON "Book" USING ivfflat (embedding vector_cosine_ops);
+npm run db:migrate:dev      # creates tables from prisma/migrations
 
 # 4. seed (optional)
 npx tsx prisma/seed.ts
@@ -75,6 +71,75 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000).
 
 > The AI librarian works without an `OPENAI_API_KEY` — `src/lib/ai.ts` returns a curated fallback list so you can develop the UI offline.
+
+## Production readiness
+
+### Deploy database changes
+
+Use migrations in production, not `prisma db push`:
+
+```bash
+npm run db:migrate:deploy
+```
+
+The initial migration enables `pgvector`, creates `Book.embedding vector(1536)`,
+and creates the `book_embedding_idx` ivfflat index. Your database role must be
+allowed to run `CREATE EXTENSION IF NOT EXISTS vector`.
+
+For an existing non-migrated database, baseline it before deploying migrations
+or create a fresh staging database and restore only the data you want to keep.
+
+### Verify before sharing with testers
+
+```bash
+npm run lint
+npm run build
+npm test
+```
+
+`npm test` always checks unauthenticated API protection. CRUD integration tests
+run only when `TEST_DATABASE_URL` points at a migrated throwaway database:
+
+```powershell
+$env:TEST_DATABASE_URL="postgresql://user:password@host/athena_test?schema=public"
+npm run db:migrate:deploy
+npm test
+```
+
+Do not point `TEST_DATABASE_URL` at production.
+
+### Required production environment
+
+- `DATABASE_URL`
+- `NEXT_PUBLIC_PRIVY_APP_ID`
+- `PRIVY_APP_SECRET`
+- One AI provider key: `GEMINI_API_KEY`, `GROQ_API_KEY`, or `OPENAI_API_KEY`
+- Optional but recommended: `GOOGLE_BOOKS_API_KEY`
+- Optional but recommended: `NEXT_PUBLIC_FEEDBACK_EMAIL`
+
+In production, missing Privy config now fails loudly instead of silently
+disabling auth.
+
+### Manual setup before tester invites
+
+- In Privy, add the deployed domain and callback URLs for email and Google login.
+- Confirm email login and Google login on the deployed URL.
+- Enable database backups on Neon/Supabase/Railway.
+- Connect Vercel logs to your observability provider, or add Sentry/Axiom/Logtail
+  credentials. The app logs structured errors for AI and catalog failures.
+- Seed staging with `npm run db:seed` so testers land in a populated community.
+- Set `NEXT_PUBLIC_FEEDBACK_EMAIL` so `/feedback` sends tester reports to the
+  right inbox.
+
+### Security and privacy model
+
+- Notes are private to the signed-in user.
+- Shelves are public or private via `Shelf.isPublic`.
+- Reviews and quotes are public by default, with `isPublic` flags in the schema.
+  Public profile, book, and feed reads filter to public reviews/quotes only.
+- Mutating routes and expensive catalog/AI routes have basic in-memory rate
+  limits. For multi-region/high-volume production, move these limits to a shared
+  store such as Upstash Redis.
 
 ## MVP scope
 

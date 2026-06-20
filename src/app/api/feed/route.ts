@@ -40,7 +40,7 @@ export async function GET(req: Request) {
 
   const [reviews, entries] = await Promise.all([
     db.review.findMany({
-      where: { userId: { in: ids } },
+      where: { userId: { in: ids }, isPublic: true },
       include: { user: true, book: true, _count: { select: { likes: true, comments: true } } },
       orderBy: { createdAt: "desc" },
       take: 30,

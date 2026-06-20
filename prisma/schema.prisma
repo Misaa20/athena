@@ -60,6 +60,7 @@ model Book {
   pageCount     Int?
   publishedYear Int?
   genres        String[]
+  embedding     Unsupported("vector(1536)")?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -131,6 +132,7 @@ model Review {
   rating    Int      // 1..5
   body      String
   spoiler   Boolean  @default(false)
+  isPublic  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -201,6 +203,7 @@ model Quote {
   bookId    String
   body      String
   page      Int?
+  isPublic  Boolean  @default(true)
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -220,7 +223,5 @@ model Follow {
   @@id([followerId, followingId])
 }
 
-// Raw SQL adds a pgvector column for semantic recommendations.
-// Run after the rest of the schema is applied:
-//   ALTER TABLE "Book" ADD COLUMN IF NOT EXISTS embedding vector(1536);
-//   CREATE INDEX IF NOT EXISTS book_embedding_idx ON "Book" USING ivfflat (embedding vector_cosine_ops);
+// The migration adds an ivfflat index for Book.embedding:
+//   CREATE INDEX "book_embedding_idx" ON "Book" USING ivfflat ("embedding" vector_cosine_ops);

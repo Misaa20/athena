@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { rateLimit } from "@/lib/rate-limit";
 
 const Body = z
   .object({ username: z.string().optional(), userId: z.string().optional() })
@@ -36,6 +37,9 @@ export async function GET(req: Request) {
 
 // POST /api/follow { username | userId } — follow that user (idempotent).
 export async function POST(req: Request) {
+  const limited = rateLimit(req, { name: "follow:write", limit: 40, windowMs: 60_000 });
+  if (limited) return limited;
+
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
@@ -56,6 +60,9 @@ export async function POST(req: Request) {
 
 // DELETE /api/follow?username=... | ?userId=... — unfollow.
 export async function DELETE(req: Request) {
+  const limited = rateLimit(req, { name: "follow:write", limit: 40, windowMs: 60_000 });
+  if (limited) return limited;
+
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

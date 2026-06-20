@@ -18,7 +18,7 @@ export function useToast() {
   // Safe fallback if used outside provider (won't crash the page).
   return (
     ctx ?? {
-      push: (_k: ToastKind, _m: string) => {
+      push: () => {
         if (typeof window !== "undefined") console.warn("Toast used without provider");
       },
     }

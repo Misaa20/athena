@@ -17,6 +17,20 @@ function bearerToken(req: Request): string | null {
   return header.startsWith("Bearer ") ? header.slice(7).trim() || null : null;
 }
 
+async function testBypassUser(req: Request): Promise<User | null> {
+  if (process.env.NODE_ENV === "production") return null;
+  const secret = process.env.AUTH_TEST_BYPASS_SECRET;
+  if (!secret) return null;
+
+  const token = bearerToken(req);
+  const prefix = `test:${secret}:`;
+  if (!token?.startsWith(prefix)) return null;
+
+  const userId = token.slice(prefix.length);
+  if (!userId) return null;
+  return db.user.findUnique({ where: { id: userId } });
+}
+
 // Derive a unique, URL-safe username from an email, retrying with a numeric
 // suffix on collision (username is unique in the schema).
 async function uniqueUsername(email: string): Promise<string> {
@@ -49,7 +63,15 @@ function profileFromPrivy(linkedAccounts: { type: string; [k: string]: unknown }
  * sight. Returns null when there's no valid token (caller should 401).
  */
 export async function getCurrentUser(req: Request): Promise<User | null> {
-  if (!privy) return null;
+  const bypass = await testBypassUser(req);
+  if (bypass) return bypass;
+
+  if (!privy) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Privy auth is not configured. Set NEXT_PUBLIC_PRIVY_APP_ID and PRIVY_APP_SECRET.");
+    }
+    return null;
+  }
   const token = bearerToken(req);
   if (!token) return null;
 

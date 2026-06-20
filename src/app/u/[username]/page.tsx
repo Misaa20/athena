@@ -18,11 +18,13 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
     include: {
       entries: { include: { book: true }, orderBy: { updatedAt: "desc" }, take: 24 },
       reviews: {
+        where: { isPublic: true },
         include: { book: true, _count: { select: { likes: true, comments: true } } },
         orderBy: { createdAt: "desc" },
         take: 12,
       },
       quotes: {
+        where: { isPublic: true },
         include: { book: { select: { id: true, title: true, authors: true, coverUrl: true } } },
         orderBy: { createdAt: "desc" },
         take: 6,

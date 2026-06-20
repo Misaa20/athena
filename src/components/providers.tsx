@@ -7,7 +7,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   // Render children without Privy if app id is missing — keeps the UI usable
   // for landing-page browsing before the user has configured Privy.
-  if (!appId) return <>{children}</>;
+  if (!appId) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Privy auth is not configured. Set NEXT_PUBLIC_PRIVY_APP_ID.");
+    }
+    return <>{children}</>;
+  }
 
   return (
     <PrivyProvider

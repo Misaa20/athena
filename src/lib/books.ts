@@ -11,6 +11,14 @@ const OPEN_LIBRARY_COVERS = "https://covers.openlibrary.org/b/id";
 // fails to parse, leaving every shelf empty.
 const CATALOG_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+const catalogWarningKeys = new Set<string>();
+
+function catalogWarn(key: string, ...args: unknown[]) {
+  if (process.env.CATALOG_DEBUG !== "1" && process.env.NODE_ENV === "production") return;
+  if (catalogWarningKeys.has(key)) return;
+  catalogWarningKeys.add(key);
+  console.warn(...args);
+}
 
 // Hard timeout on every catalog request. Without this, Node's fetch can stall
 // for ~60s on IPv6 connect timeouts when OL/Google routes flap, which then
@@ -56,7 +64,7 @@ export async function searchBooks(query: string, limit = 20): Promise<BookSearch
     const results = await searchGoogleBooks(query, limit);
     if (results.length > 0) return results;
   } catch (err) {
-    console.warn("Google Books unavailable, falling back to OpenLibrary:", (err as Error).message);
+    catalogWarn("google-search", "Google Books unavailable, falling back to OpenLibrary:", (err as Error).message);
   }
   return searchOpenLibrary(query, limit);
 }
@@ -422,7 +430,7 @@ export async function getTrendingBooks(limit = 14): Promise<BookSearchResult[]> 
       .filter((b) => b.coverUrl)
       .slice(0, limit);
   } catch (err) {
-    console.warn("Trending books unavailable:", (err as Error).message);
+    catalogWarn("trending", "Trending books unavailable:", (err as Error).message);
     return [];
   }
 }
@@ -447,7 +455,7 @@ export async function getNewReleases(limit = 14): Promise<BookSearchResult[]> {
       .filter((b) => b.coverUrl)
       .slice(0, limit);
   } catch (err) {
-    console.warn("New releases unavailable:", (err as Error).message);
+    catalogWarn("new-releases", "New releases unavailable:", (err as Error).message);
     return [];
   }
 }
@@ -485,7 +493,7 @@ export async function getTrendingBySubject(
       .filter(looksEnglish);
     if (books.length > 0) return books.slice(0, limit);
   } catch (err) {
-    console.warn(`Trending in "${subject}" unavailable:`, (err as Error).message);
+    catalogWarn(`trending:${subject}`, `Trending in "${subject}" unavailable:`, (err as Error).message);
   }
   // Fallback: the default subject feed (already English-filtered) so the shelf
   // isn't empty when search is unreachable.
@@ -520,7 +528,7 @@ export async function getNewReleasesBySubject(
       .filter(looksEnglish)
       .slice(0, limit);
   } catch (err) {
-    console.warn(`New in "${subject}" unavailable:`, (err as Error).message);
+    catalogWarn(`new:${subject}`, `New in "${subject}" unavailable:`, (err as Error).message);
     return [];
   }
 }
@@ -589,7 +597,7 @@ async function fetchSubjectBatch(
       return { works: data.works ?? [], total: data.work_count ?? 0, ok: true };
     } catch (err) {
       if (attempt === delays.length) {
-        console.warn(`Subject "${subject}" unavailable:`, (err as Error).message);
+        catalogWarn(`subject:${subject}`, `Subject "${subject}" unavailable:`, (err as Error).message);
         return { works: [], total: 0, ok: false };
       }
       await new Promise((r) => setTimeout(r, delays[attempt]));
@@ -802,7 +810,7 @@ async function getOpenLibraryWork(key: string): Promise<BookSearchResult | null>
       publishedYear,
     };
   } catch (err) {
-    console.warn("OpenLibrary work lookup failed:", (err as Error).message);
+    catalogWarn(`work:${key}`, "OpenLibrary work lookup failed:", (err as Error).message);
     return null;
   }
 }
@@ -909,7 +917,7 @@ async function getGoogleVolume(id: string): Promise<BookSearchResult | null> {
       // Network / abort — retry
     }
   }
-  console.warn("Google volume lookup failed after retries:", id);
+  catalogWarn(`google-volume:${id}`, "Google volume lookup failed after retries:", id);
   return null;
 }
 

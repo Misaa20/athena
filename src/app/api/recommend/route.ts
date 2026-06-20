@@ -3,12 +3,17 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { recommendBooks } from "@/lib/ai";
+import { rateLimit } from "@/lib/rate-limit";
+import { logError } from "@/lib/log";
 
 const Body = z.object({
   prompt: z.string().min(2),
 });
 
 export async function POST(req: Request) {
+  const limited = rateLimit(req, { name: "recommend", limit: 10, windowMs: 60_000 });
+  if (limited) return limited;
+
   const parsed = Body.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_input", issues: parsed.error.issues }, { status: 400 });
@@ -39,7 +44,7 @@ export async function POST(req: Request) {
     const recommendations = await recommendBooks({ prompt, recentBooks });
     return NextResponse.json({ recommendations, usedLibrary: recentBooks.length });
   } catch (err) {
-    console.error(err);
+    logError("recommend.failed", err, { promptLength: prompt.length, usedLibrary: recentBooks.length });
     return NextResponse.json({ error: "ai_failed" }, { status: 500 });
   }
 }

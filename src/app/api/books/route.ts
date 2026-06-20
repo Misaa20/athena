@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { BookPayload, resolveBookId } from "@/lib/book-store";
+import { rateLimit } from "@/lib/rate-limit";
 
 // POST /api/books — upsert a book into the shared catalog (called when a user
 // adds a search result to their library). Requires auth so anonymous callers
@@ -9,6 +10,9 @@ import { BookPayload, resolveBookId } from "@/lib/book-store";
 // without external identifiers is created once rather than re-created on every
 // request (the old `where: { id: "" }` upsert minted a duplicate each time).
 export async function POST(req: Request) {
+  const limited = rateLimit(req, { name: "books:write", limit: 60, windowMs: 60_000 });
+  if (limited) return limited;
+
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

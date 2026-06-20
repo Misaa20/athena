@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { BookPayload, resolveBookId } from "@/lib/book-store";
+import { rateLimit } from "@/lib/rate-limit";
 
 const AddBody = z
   .object({
@@ -14,6 +15,9 @@ const AddBody = z
 // POST /api/me/shelves/[id]/books — add a book to a shelf (idempotent).
 // Accepts a known bookId or a catalog payload (upserted on the fly).
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const limited = rateLimit(req, { name: "shelf-books:write", limit: 60, windowMs: 60_000 });
+  if (limited) return limited;
+
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id } = await params;
@@ -39,6 +43,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
 // DELETE /api/me/shelves/[id]/books?bookId=... — remove from shelf.
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const limited = rateLimit(req, { name: "shelf-books:write", limit: 60, windowMs: 60_000 });
+  if (limited) return limited;
+
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id } = await params;

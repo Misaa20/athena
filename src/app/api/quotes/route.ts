@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { BookPayload, resolveBookId } from "@/lib/book-store";
+import { rateLimit } from "@/lib/rate-limit";
 
 // GET /api/quotes              — the current user's quotes (authed)
 // GET /api/quotes?username=... — a reader's public quotes
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
   }
 
   const quotes = await db.quote.findMany({
-    where: { userId },
+    where: { userId, ...(username ? { isPublic: true } : {}) },
     include: { book: { select: { id: true, title: true, authors: true, coverUrl: true } } },
     orderBy: { createdAt: "desc" },
     take: 60,
@@ -41,6 +42,7 @@ const Body = z
   .object({
     body: z.string().min(1).max(2000),
     page: z.number().int().positive().optional(),
+    isPublic: z.boolean().default(true),
     bookId: z.string().optional(),
     book: BookPayload.optional(),
   })
@@ -48,6 +50,9 @@ const Body = z
 
 // POST /api/quotes — save a quote from a book.
 export async function POST(req: Request) {
+  const limited = rateLimit(req, { name: "quotes:write", limit: 40, windowMs: 60_000 });
+  if (limited) return limited;
+
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
@@ -63,6 +68,7 @@ export async function POST(req: Request) {
       bookId: resolvedBookId,
       body: parsed.data.body.trim(),
       page: parsed.data.page ?? null,
+      isPublic: parsed.data.isPublic,
     },
   });
   return NextResponse.json({ quote });
@@ -70,6 +76,9 @@ export async function POST(req: Request) {
 
 // DELETE /api/quotes?id=... — remove one of the user's quotes.
 export async function DELETE(req: Request) {
+  const limited = rateLimit(req, { name: "quotes:write", limit: 40, windowMs: 60_000 });
+  if (limited) return limited;
+
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

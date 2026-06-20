@@ -11,8 +11,8 @@ export default async function BookPage({ params }: { params: Promise<{ id: strin
   const book = await db.book.findUnique({
     where: { id },
     include: {
-      reviews: { take: 10, orderBy: { createdAt: "desc" }, include: { user: true } },
-      quotes: { take: 10, orderBy: { createdAt: "desc" }, include: { user: true } },
+      reviews: { where: { isPublic: true }, take: 10, orderBy: { createdAt: "desc" }, include: { user: true } },
+      quotes: { where: { isPublic: true }, take: 10, orderBy: { createdAt: "desc" }, include: { user: true } },
     },
   });
 
@@ -20,7 +20,7 @@ export default async function BookPage({ params }: { params: Promise<{ id: strin
 
   // Average rating across all reviews for this book (not just the 10 shown).
   const agg = await db.review.aggregate({
-    where: { bookId: id },
+    where: { bookId: id, isPublic: true },
     _avg: { rating: true },
     _count: { rating: true },
   });

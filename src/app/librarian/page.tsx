@@ -125,7 +125,7 @@ export default function LibrarianPage() {
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-accent">Example answer</p>
             <h2 className="mt-2 font-serif text-2xl text-ink-900">
-              For "a quiet, philosophical novel under 300 pages"
+              For &quot;a quiet, philosophical novel under 300 pages&quot;
             </h2>
           </div>
           <div className="grid gap-4 md:grid-cols-3">

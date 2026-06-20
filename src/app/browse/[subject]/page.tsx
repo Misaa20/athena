@@ -7,6 +7,7 @@ import { Shelf } from "@/components/shelf";
 import { AuthorsInGenreShelf } from "@/components/authors-in-genre-shelf";
 import {
   CATEGORIES,
+  FEATURED_CATEGORIES,
   categoryDescription,
   categoryLabel,
   getNewReleasesBySubject,
@@ -22,12 +23,7 @@ const PAGE_SIZE = 24;
 // Pre-render the known genres AND their sub-genres; arbitrary subjects still
 // work on demand.
 export function generateStaticParams() {
-  const params: { subject: string }[] = [];
-  for (const c of CATEGORIES) {
-    params.push({ subject: c.subject });
-    for (const s of c.subGenres ?? []) params.push({ subject: s.subject });
-  }
-  return params;
+  return FEATURED_CATEGORIES.map((c) => ({ subject: c.subject }));
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ subject: string }> }) {

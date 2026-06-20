@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { rateLimit } from "@/lib/rate-limit";
 
 const PatchBody = z
   .object({
@@ -14,6 +15,9 @@ const PatchBody = z
 
 // PATCH /api/me/shelves/[id] — rename or toggle visibility.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const limited = rateLimit(req, { name: "shelves:write", limit: 30, windowMs: 60_000 });
+  if (limited) return limited;
+
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id } = await params;
@@ -39,6 +43,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 // DELETE /api/me/shelves/[id] — drop the shelf and its entries.
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const limited = rateLimit(req, { name: "shelves:write", limit: 30, windowMs: 60_000 });
+  if (limited) return limited;
+
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const { id } = await params;

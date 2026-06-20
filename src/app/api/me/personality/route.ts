@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { readingPersonality } from "@/lib/ai";
+import { rateLimit } from "@/lib/rate-limit";
 
 // GET /api/me/personality — the stored reading personality (if generated).
 export async function GET(req: Request) {
@@ -17,6 +18,9 @@ export async function GET(req: Request) {
 
 // POST /api/me/personality — (re)generate from the user's library and store it.
 export async function POST(req: Request) {
+  const limited = rateLimit(req, { name: "personality:generate", limit: 5, windowMs: 60_000 });
+  if (limited) return limited;
+
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
