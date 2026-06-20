@@ -15,6 +15,7 @@ export type GoodreadsImportEntry = {
   book: GoodreadsImportBook;
   status: ImportReadingStatus;
   rating: number | null;
+  customShelves: string[];
   startedAt?: Date;
   finishedAt?: Date;
   privateNote?: string;
@@ -25,6 +26,7 @@ export type GoodreadsImportSummary = {
   imported: number;
   skipped: number;
   notes: number;
+  customShelves: number;
   byStatus: Record<ImportReadingStatus, number>;
 };
 
@@ -52,7 +54,8 @@ export function parseGoodreadsCsv(csv: string): GoodreadsImportEntry[] {
     ].filter(Boolean);
     const isbn13 = cleanIsbn(get("ISBN13")) ?? cleanIsbn(get("ISBN"));
     const rating = parseRating(get("My Rating"));
-    const status = mapStatus(get("Exclusive Shelf"), get("Bookshelves"));
+    const shelves = get("Bookshelves");
+    const status = mapStatus(get("Exclusive Shelf"), shelves);
     const dateRead = parseGoodreadsDate(get("Date Read"));
     const dateAdded = parseGoodreadsDate(get("Date Added"));
     const privateNote = get("Private Notes") || undefined;
@@ -69,6 +72,7 @@ export function parseGoodreadsCsv(csv: string): GoodreadsImportEntry[] {
       },
       status,
       rating,
+      customShelves: parseCustomShelves(shelves),
       ...(status === "READING" && dateAdded ? { startedAt: dateAdded } : {}),
       ...(status === "FINISHED" && dateRead ? { finishedAt: dateRead } : {}),
       ...(privateNote ? { privateNote } : {}),
@@ -81,12 +85,14 @@ export function parseGoodreadsCsv(csv: string): GoodreadsImportEntry[] {
 export function summarizeGoodreadsImport(entries: GoodreadsImportEntry[], sourceRowCount = entries.length): GoodreadsImportSummary {
   const byStatus = Object.fromEntries(STATUSES.map((status) => [status, 0])) as Record<ImportReadingStatus, number>;
   for (const entry of entries) byStatus[entry.status] += 1;
+  const customShelves = new Set(entries.flatMap((entry) => entry.customShelves));
 
   return {
     rows: sourceRowCount,
     imported: entries.length,
     skipped: Math.max(0, sourceRowCount - entries.length),
     notes: entries.filter((entry) => entry.privateNote).length,
+    customShelves: customShelves.size,
     byStatus,
   };
 }
@@ -180,6 +186,18 @@ function mapStatus(exclusiveShelf: string, shelves: string): ImportReadingStatus
     default:
       return "WANT_TO_READ";
   }
+}
+
+function parseCustomShelves(shelves: string) {
+  const systemShelves = new Set(["read", "currently-reading", "to-read", "dnf", "did-not-finish", "abandoned"]);
+  return [
+    ...new Set(
+      shelves
+        .split(",")
+        .map((shelf) => shelf.trim())
+        .filter((shelf) => shelf && !systemShelves.has(shelf.toLowerCase())),
+    ),
+  ];
 }
 
 function stableImportId(title: string, authors: string[], isbn?: string) {

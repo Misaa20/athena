@@ -54,7 +54,7 @@ test("Goodreads CSV parser maps shelves, ratings, quoted fields, and private not
   const { parseGoodreadsCsv, summarizeGoodreadsImport } = await import("../src/lib/goodreads-import");
   const csv = [
     "Book Id,Title,Author,Additional Authors,ISBN,ISBN13,My Rating,Number of Pages,Year Published,Original Publication Year,Date Read,Date Added,Bookshelves,Exclusive Shelf,Private Notes",
-    '1,"The Left Hand, Revisited",Ursula K. Le Guin,"Ann Leckie, N. K. Jemisin",="0441007317",="9780441007318",5,304,2000,1969,2024/01/05,2023/12/30,,read,"Cold, sharp note"',
+    '1,"The Left Hand, Revisited",Ursula K. Le Guin,"Ann Leckie, N. K. Jemisin",="0441007317",="9780441007318",5,304,2000,1969,2024/01/05,2023/12/30,"favorites, owned-books, read",read,"Cold, sharp note"',
     '2,Abandoned Book,Somebody,,="",="",0,,,,,2024/02/01,"dnf, favorites",to-read,',
   ].join("\n");
 
@@ -66,6 +66,7 @@ test("Goodreads CSV parser maps shelves, ratings, quoted fields, and private not
   assert.equal(entries[0].book.isbn13, "9780441007318");
   assert.deepEqual(entries[0].book.authors, ["Ursula K. Le Guin", "Ann Leckie", "N. K. Jemisin"]);
   assert.equal(entries[0].status, "FINISHED");
+  assert.deepEqual(entries[0].customShelves, ["favorites", "owned-books"]);
   assert.equal(entries[0].rating, 5);
   assert.equal(entries[0].finishedAt?.toISOString(), "2024-01-05T00:00:00.000Z");
   assert.equal(entries[0].privateNote, "Cold, sharp note");
@@ -74,6 +75,7 @@ test("Goodreads CSV parser maps shelves, ratings, quoted fields, and private not
   assert.equal(summary.byStatus.FINISHED, 1);
   assert.equal(summary.byStatus.DNF, 1);
   assert.equal(summary.notes, 1);
+  assert.equal(summary.customShelves, 2);
 });
 
 test(

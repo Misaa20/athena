@@ -30,6 +30,7 @@ type ImportSummary = {
   imported: number;
   skipped: number;
   notes: number;
+  customShelves: number;
   byStatus: {
     WANT_TO_READ: number;
     READING: number;
@@ -121,7 +122,8 @@ function LibraryContent() {
 
   async function onImport(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const form = new FormData(formEl);
     const file = form.get("file");
     if (!(file instanceof File) || file.size === 0) {
       setImportError("Choose the Goodreads CSV export first.");
@@ -147,7 +149,7 @@ function LibraryContent() {
       };
       if (!res.ok || !data.summary) throw new Error(importErrorMessage(data.error));
       setImportSummary(data.summary);
-      e.currentTarget.reset();
+      formEl.reset();
       await loadShelves();
     } catch (err) {
       setImportError(err instanceof Error ? err.message : "Import failed. Try another CSV export.");
@@ -225,6 +227,11 @@ function LibraryContent() {
               {importSummary.notes > 0 && (
                 <span className="rounded-md border border-ink-200 px-2.5 py-1">
                   {importSummary.notes} private notes saved
+                </span>
+              )}
+              {importSummary.customShelves > 0 && (
+                <span className="rounded-md border border-ink-200 px-2.5 py-1">
+                  {importSummary.customShelves} custom shelves imported
                 </span>
               )}
             </div>

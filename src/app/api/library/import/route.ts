@@ -31,6 +31,7 @@ export async function POST(req: Request) {
 
   let imported = 0;
   let notes = 0;
+  const importedShelves = new Set<string>();
 
   for (const entry of entries) {
     const book = await upsertImportedBook(entry.book);
@@ -53,6 +54,20 @@ export async function POST(req: Request) {
       },
     });
 
+    for (const shelfName of entry.customShelves) {
+      const shelf = await db.shelf.upsert({
+        where: { userId_name: { userId: user.id, name: shelfName } },
+        update: {},
+        create: { userId: user.id, name: shelfName, isPublic: true },
+      });
+      await db.shelfEntry.upsert({
+        where: { shelfId_bookId: { shelfId: shelf.id, bookId: book.id } },
+        update: {},
+        create: { shelfId: shelf.id, bookId: book.id },
+      });
+      importedShelves.add(shelfName);
+    }
+
     if (entry.privateNote) {
       const existingNote = await db.note.findFirst({
         where: { userId: user.id, bookId: book.id, body: entry.privateNote },
@@ -74,7 +89,9 @@ export async function POST(req: Request) {
   }
 
   const summary = summarizeGoodreadsImport(entries, sourceRows);
-  return NextResponse.json({ summary: { ...summary, imported, notes } });
+  return NextResponse.json({
+    summary: { ...summary, imported, notes, customShelves: importedShelves.size },
+  });
 }
 
 async function readCsvBody(req: Request) {
