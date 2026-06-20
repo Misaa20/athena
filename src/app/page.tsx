@@ -45,7 +45,7 @@ const faqs = [
   },
   {
     question: "Can I import from Goodreads?",
-    answer: "Goodreads import is planned. For now, search any book and add it to your shelves manually.",
+    answer: "Yes. Export your Goodreads library as a CSV, then import shelf status, ratings, read dates, and private notes from your Athena library.",
   },
   {
     question: "Is my reading data private?",

@@ -25,6 +25,7 @@ function authed(path: string, userId: string, init: RequestInit = {}) {
 
 test("protected API routes return 401 without auth", async () => {
   const library = await import("../src/app/api/library/route");
+  const libraryImport = await import("../src/app/api/library/import/route");
   const reviews = await import("../src/app/api/reviews/route");
   const quotes = await import("../src/app/api/quotes/route");
   const shelves = await import("../src/app/api/me/shelves/route");
@@ -33,6 +34,7 @@ test("protected API routes return 401 without auth", async () => {
   const cases = [
     () => library.GET(request("/api/library")),
     () => library.POST(request("/api/library", { method: "POST", body: "{}" })),
+    () => libraryImport.POST(request("/api/library/import", { method: "POST", body: "" })),
     () => reviews.GET(request("/api/reviews")),
     () => reviews.POST(request("/api/reviews", { method: "POST", body: "{}" })),
     () => quotes.GET(request("/api/quotes")),
@@ -46,6 +48,32 @@ test("protected API routes return 401 without auth", async () => {
     const res = await call();
     assert.equal(res.status, 401);
   }
+});
+
+test("Goodreads CSV parser maps shelves, ratings, quoted fields, and private notes", async () => {
+  const { parseGoodreadsCsv, summarizeGoodreadsImport } = await import("../src/lib/goodreads-import");
+  const csv = [
+    "Book Id,Title,Author,Additional Authors,ISBN,ISBN13,My Rating,Number of Pages,Year Published,Original Publication Year,Date Read,Date Added,Bookshelves,Exclusive Shelf,Private Notes",
+    '1,"The Left Hand, Revisited",Ursula K. Le Guin,"Ann Leckie, N. K. Jemisin",="0441007317",="9780441007318",5,304,2000,1969,2024/01/05,2023/12/30,,read,"Cold, sharp note"',
+    '2,Abandoned Book,Somebody,,="",="",0,,,,,2024/02/01,"dnf, favorites",to-read,',
+  ].join("\n");
+
+  const entries = parseGoodreadsCsv(csv);
+  const summary = summarizeGoodreadsImport(entries, 2);
+
+  assert.equal(entries.length, 2);
+  assert.equal(entries[0].book.title, "The Left Hand, Revisited");
+  assert.equal(entries[0].book.isbn13, "9780441007318");
+  assert.deepEqual(entries[0].book.authors, ["Ursula K. Le Guin", "Ann Leckie", "N. K. Jemisin"]);
+  assert.equal(entries[0].status, "FINISHED");
+  assert.equal(entries[0].rating, 5);
+  assert.equal(entries[0].finishedAt?.toISOString(), "2024-01-05T00:00:00.000Z");
+  assert.equal(entries[0].privateNote, "Cold, sharp note");
+  assert.equal(entries[1].status, "DNF");
+  assert.equal(entries[1].rating, null);
+  assert.equal(summary.byStatus.FINISHED, 1);
+  assert.equal(summary.byStatus.DNF, 1);
+  assert.equal(summary.notes, 1);
 });
 
 test(

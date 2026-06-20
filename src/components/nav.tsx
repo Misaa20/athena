@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
-import { ChevronDown, Menu, X, BookOpenText, User, Quote, Library, LogOut } from "lucide-react";
+import { ChevronDown, Menu, X, BookOpenText, User, Quote, Library, LogOut, UserRound } from "lucide-react";
 import { CATEGORIES } from "@/lib/books";
 import { cn } from "@/lib/utils";
 import { CommandPalette } from "@/components/command-palette";
@@ -251,12 +251,17 @@ function AuthButton() {
   }, [open]);
 
   if (!ready) {
-    return <span className="px-2 text-ink-900/40">…</span>;
+    return (
+      <span
+        aria-label="Loading account menu"
+        className="inline-flex h-9 w-9 rounded-full border border-accent/25 bg-ink-100/70 shimmer"
+      />
+    );
   }
 
   if (authenticated) {
     const email = user?.email?.address ?? user?.google?.email ?? "Signed in";
-    const initial = (email[0] ?? "A").toUpperCase();
+    const initial = username?.[0]?.toUpperCase() ?? (email !== "Signed in" ? email[0]?.toUpperCase() : "");
     return (
       <div className="relative" ref={menuRef}>
         <button
@@ -265,16 +270,16 @@ function AuthButton() {
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-1.5 rounded-full transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ink-50"
+          className="flex h-10 items-center gap-1.5 rounded-full border border-accent/30 bg-ink-100/80 px-1.5 shadow-glow transition hover:border-accent/60 hover:bg-ink-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ink-50"
         >
           <span
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-accent/50 to-wine/40 text-sm font-medium text-ink-50 ring-1 ring-accent/40 transition hover:ring-accent/70"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm font-semibold text-ink-50 ring-1 ring-accent/70 transition"
             title={email}
           >
-            {initial}
+            {initial || <UserRound className="h-4 w-4" />}
           </span>
           <ChevronDown
-            className={cn("h-3 w-3 text-ink-900/50 transition-transform", open && "rotate-180")}
+            className={cn("h-3.5 w-3.5 text-ink-900/70 transition-transform", open && "rotate-180")}
           />
         </button>
 
